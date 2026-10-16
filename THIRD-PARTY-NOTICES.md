@@ -5,7 +5,7 @@ are in `licenses/`.
 
 | Component | Version | Licence | Notes |
 | --- | --- | --- | --- |
-| [OptiScaler DLSS-NR fork](https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass) (`OptiScaler.dll`, `OptiScaler/`) | v0.8.91 (commit `f45ccf3a`), **modified** | GPL-3.0 (`licenses/OptiScaler/LICENSE`) | CrownsDLSS5ER changes: an in-menu header with the emblem drawn as vector shapes, the window title, and the black/cream/gold theme. Full source of the modified version: [CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass, branch `crownsdlss5er`](https://github.com/CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass/tree/crownsdlss5er), also as `patches/`. |
+| [OptiScaler DLSS-NR fork](https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass) (`OptiScaler.dll`, `OptiScaler/`) | v0.8.91 (commit `f45ccf3a`), **modified** | GPL-3.0 (`licenses/OptiScaler/LICENSE`) | CrownsDLSS5ER changes: an in-menu header with the emblem drawn as vector shapes, the window title, and the menu theme. Full source of the modified version: [CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass, branch `crownsdlss5er`](https://github.com/CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass/tree/crownsdlss5er), also as `patches/`. |
 | AMD FidelityFX SDK (inside `OptiScaler/`) | as shipped by the fork | MIT (`licenses/OptiScaler/FidelityFX_*`) | |
 | Intel XeSS (inside `OptiScaler/`) | as shipped by the fork | Intel Simplified Software License (`licenses/OptiScaler/XeSS_LICENSE.txt`) | Redistributed unmodified. |
 | Microsoft DirectX Agility SDK `D3D12Core.dll` (inside `OptiScaler/`) | as shipped by the fork | Microsoft DirectX licence (`licenses/OptiScaler/DirectX_LICENSE.txt`) | Distributable code. |

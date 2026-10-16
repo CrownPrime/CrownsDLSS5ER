@@ -11,7 +11,7 @@ available here.
   `OptiScaler/dlssnr/DlssNr_Menu.cpp`. They add:
   - a CrownsDLSS5ER header with the emblem drawn as ImGui shapes;
   - the window title;
-  - warm black/cream/dark-gold theme defaults;
+  - theme colour defaults;
   - gold in place of green in the DLSS-NR panel.
 
 **To build it yourself:**
