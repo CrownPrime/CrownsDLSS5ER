@@ -1,0 +1,197 @@
+diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
+--- a/src/addon.cpp	2026-10-13 20:12:58.798128300 +0530
++++ b/src/addon.cpp	2026-10-13 20:12:58.861583600 +0530
+@@ -186,6 +186,10 @@
+ fs::path g_ini_path;
+ 
+ device* g_device = nullptr;
++// Every live D3D12 device. Another module (e.g. OptiScaler's startup GPU check) can create and later destroy a
++// device before the game's own; when the bound device goes away, the add-on moves to a remaining one.
++std::vector<device*> g_d3d12_devices;
++std::mutex g_devices_mutex;
+ erdlss::Dlss g_dlss;
+ 
+ // Wind motion vectors. Animated materials' G-buffer pipelines are kept from pipeline creation (shaders and states),
+@@ -673,6 +677,56 @@
+ 
+ // --- DLSS --------------------------------------------------------------------------------------------------
+ 
++// ReShade's D3D12 proxies derive from the COM interface first and the add-on API object second, so the interface
++// pointer sits one vtable pointer before the API object. NGX gets the proxies, the objects the game itself uses:
++// OptiScaler's neural rendering creates descriptor heaps through ReShade's proxy device, and binding those
++// (ReShade-wrapped) heaps on the unwrapped command list crashes in D3D12. A candidate is accepted only when both
++// vtables live in the same module (ReShade) and it answers QueryInterface with itself.
++template <typename T>
++T* ReshadeProxy(void* api_object) {
++  constexpr DWORD kFlags = GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
++  void* const candidate = static_cast<char*>(api_object) - sizeof(void*);
++  HMODULE api_module = nullptr, com_module = nullptr;
++  if (!GetModuleHandleExW(kFlags, static_cast<LPCWSTR>(*static_cast<void**>(api_object)), &api_module) ||
++      !GetModuleHandleExW(kFlags, static_cast<LPCWSTR>(*static_cast<void**>(candidate)), &com_module) ||
++      api_module != com_module)
++    return nullptr;
++  T* queried = nullptr;
++  if (FAILED(static_cast<IUnknown*>(candidate)->QueryInterface(IID_PPV_ARGS(&queried))) || queried == nullptr)
++    return nullptr;
++  queried->Release();
++  return static_cast<void*>(queried) == candidate ? queried : nullptr;
++}
++
++// The command list NGX records into: ReShade's proxy when it can be found, else the native list.
++ID3D12GraphicsCommandList* NgxList(command_list* cmd_list, ID3D12GraphicsCommandList* native) {
++  ID3D12GraphicsCommandList* const proxy = ReshadeProxy<ID3D12GraphicsCommandList>(cmd_list);
++  static std::atomic<bool> logged{false};
++  if (!logged.exchange(true))
++    Log(reshade::log::level::info, proxy != nullptr ? "NGX records into ReShade's command list proxies."
++                                                    : "ReShade command list proxy not found; NGX uses native lists.");
++  return proxy != nullptr ? proxy : native;
++}
++
++// NGX must run on the device that owns the game's command lists. Under ReShade plus another D3D12 hook the add-on's
++// device can be a different object for the same GPU; models that create their own D3D12 objects then crash. Called
++// with g_dlss_mutex held, before a feature is created.
++void MatchNgxDevice(ID3D12GraphicsCommandList* cmd) {
++  ID3D12Device* list_device = nullptr;
++  if (FAILED(cmd->GetDevice(IID_PPV_ARGS(&list_device))) || list_device == nullptr) return;
++  if (list_device != g_dlss.device()) {
++    char text[160];
++    std::snprintf(text, sizeof(text), "NGX device %p differs from the command list's device %p; re-initializing NGX on it.",
++                  static_cast<void*>(g_dlss.device()), static_cast<void*>(list_device));
++    Log(reshade::log::level::warning, text);
++    g_dlss.Shutdown();
++    const fs::path log_dir = g_addon_dir / L"ngx";
++    if (!g_dlss.Init(list_device, g_addon_dir.wstring(), log_dir.wstring()))
++      Log(reshade::log::level::warning, "DLSS unavailable on the command list's device: " + g_dlss.status());
++  }
++  list_device->Release();
++}
++
+ void RetireOutput() {
+   if (g_output != 0) g_retired.push_back({g_output, g_frame.load()});
+   g_output = {0};
+@@ -1452,6 +1506,7 @@
+   if (g_config.render_scale < 1.0f && g_upscale_at_composite)
+     return PassThroughTaa(cmd_list, data, color, target, motion, scene, width, height, in_width, in_height);
+   auto* const native = reinterpret_cast<ID3D12GraphicsCommandList*>(cmd_list->get_native());
++  ID3D12GraphicsCommandList* const ngx_list = NgxList(cmd_list, native);
+   if (!EnsureOutput(dev, width, height, td.texture.format)) return false;
+   const bool game_exposure = g_config.game_exposure && EnsureExposure(dev);
+   // The render size the feature is for: the engine's, once it renders at the scale, else the one it will use.
+@@ -1473,8 +1528,10 @@
+     return false;
+   }
+   if (!g_dlss.has_feature()) {
++    MatchNgxDevice(ngx_list);
++    if (!g_dlss.available()) return false;
+     const bool created =
+-        g_dlss.Create(native, width, height, create_w, create_h, g_config.render_scale,
++        g_dlss.Create(ngx_list, width, height, create_w, create_h, g_config.render_scale,
+                       want_rr ? g_rr_preset.load() : g_config.preset, true, !game_exposure, want_rr);
+     RestoreState(cmd_list, data);
+     if (!created) {
+@@ -1539,7 +1596,7 @@
+   in.mv_scale_y = mv_scale;
+   in.reset = g_reset.exchange(false);
+   in.frame_time_ms = g_frame_time_ms.load();
+-  const bool ok = g_dlss.Evaluate(native, in);
++  const bool ok = g_dlss.Evaluate(ngx_list, in);
+   if (masked) cmd_list->barrier(g_mask, resource_usage::shader_resource, resource_usage::unordered_access);
+   RestoreState(cmd_list, data);
+   if (!ok) {
+@@ -1602,6 +1659,7 @@
+   const uint32_t width = sd.texture.width, height = sd.texture.height;
+   if (width != g_render_width.load() || height != g_render_height.load()) return;
+   auto* const native = reinterpret_cast<ID3D12GraphicsCommandList*>(cmd_list->get_native());
++  ID3D12GraphicsCommandList* const ngx_list = NgxList(cmd_list, native);
+   if (!EnsureOutput(dev, width, height, sd.texture.format)) return;
+   if (g_dlss.has_feature() && (g_dlss.feature_width() != width || g_dlss.feature_height() != height ||
+                                g_dlss.feature_scale() != g_config.render_scale || g_dlss.feature_hdr())) {
+@@ -1609,8 +1667,10 @@
+     return;
+   }
+   if (!g_dlss.has_feature()) {
++    MatchNgxDevice(ngx_list);
++    if (!g_dlss.available()) return;
+     const bool created =
+-        g_dlss.Create(native, width, height,
++        g_dlss.Create(ngx_list, width, height,
+                       in.width < width ? in.width : EngineRenderSize(width, g_config.render_scale),
+                       in.height < height ? in.height : EngineRenderSize(height, g_config.render_scale),
+                       g_config.render_scale, g_config.preset, false, false);
+@@ -1642,7 +1702,7 @@
+   dl.mv_scale_y = in.mv_scale;
+   dl.reset = in.reset;
+   dl.frame_time_ms = g_frame_time_ms.load();
+-  const bool ok = g_dlss.Evaluate(native, dl);
++  const bool ok = g_dlss.Evaluate(ngx_list, dl);
+   RestoreState(cmd_list, data);
+   if (!ok) {
+     if (++g_failures == 1) Log(reshade::log::level::error, g_dlss.status());
+@@ -1766,21 +1826,30 @@
+ 
+ // --- Events ------------------------------------------------------------------------------------------------
+ 
+-void OnInitDevice(device* dev) {
+-  if (dev->get_api() != device_api::d3d12 || g_device != nullptr) return;
++void BindDevice(device* dev) {
+   g_device = dev;
+   const fs::path log_dir = g_addon_dir / L"ngx";
+   std::error_code ec;
+   fs::create_directories(log_dir, ec);
+   std::lock_guard lock(g_dlss_mutex);
++  // The native device here: looking up ReShade's proxy inside its device creation deadlocks. MatchNgxDevice moves
++  // NGX onto the proxy command list's device before the first feature is created.
+   if (g_dlss.Init(reinterpret_cast<ID3D12Device*>(dev->get_native()), g_addon_dir.wstring(), log_dir.wstring()))
+     Log(reshade::log::level::info, "DLSS is available.");
+   else
+     Log(reshade::log::level::warning, "DLSS unavailable: " + g_dlss.status());
+ }
+ 
+-void OnDestroyDevice(device* dev) {
+-  if (dev != g_device) return;
++void OnInitDevice(device* dev) {
++  if (dev->get_api() != device_api::d3d12) return;
++  {
++    std::lock_guard lock(g_devices_mutex);
++    g_d3d12_devices.push_back(dev);
++  }
++  if (g_device == nullptr) BindDevice(dev);
++}
++
++void UnbindDevice(device* dev) {
+   std::lock_guard lock(g_dlss_mutex);
+   RetireOutput();
+   for (const Retired& r : g_retired) dev->destroy_resource(r.res);
+@@ -1816,6 +1885,21 @@
+   g_device = nullptr;
+ }
+ 
++void OnDestroyDevice(device* dev) {
++  device* next = nullptr;
++  {
++    std::lock_guard lock(g_devices_mutex);
++    std::erase(g_d3d12_devices, dev);
++    if (dev == g_device && !g_d3d12_devices.empty()) next = g_d3d12_devices.back();
++  }
++  if (dev != g_device) return;
++  UnbindDevice(dev);
++  if (next != nullptr) {
++    Log(reshade::log::level::info, "The D3D12 device DLSS was set up on was destroyed; moving to the remaining one.");
++    BindDevice(next);
++  }
++}
++
+ // Material textures use anisotropic or wrapping samplers with a mip chain; post-processing, UI and shadow
+ // lookups use clamped or comparison samplers, which keep the game's bias.
+ bool OnCreateSampler(device*, sampler_desc& desc) {
+diff -ruN --strip-trailing-cr a/src/dlss.hpp b/src/dlss.hpp
+--- a/src/dlss.hpp	2026-10-13 20:12:58.787356300 +0530
++++ b/src/dlss.hpp	2026-10-13 20:12:58.864093500 +0530
+@@ -57,6 +57,7 @@
+   bool Evaluate(ID3D12GraphicsCommandList* cmd, const DlssInputs& inputs);
+ 
+   bool available() const { return available_; }
++  ID3D12Device* device() const { return device_; }
+   bool rr_available() const { return rr_available_; }
+   bool feature_rr() const { return rr_; }
+   bool has_feature() const { return feature_ != nullptr; }
