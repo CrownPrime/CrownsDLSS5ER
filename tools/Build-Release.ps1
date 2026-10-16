@@ -26,7 +26,7 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 
 # Repository content.
 foreach ($item in @('CrownsDLSSManager.ps1', 'CrownsDLSS5ER.bat',
-    'README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'assets', 'licenses', 'patches', 'pack')) {
+    'README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'assets', 'docs', 'licenses', 'patches', 'pack')) {
   Copy-Item (Join-Path $repo $item) $stage -Recurse -Force
 }
 # Binaries from the local pack (settings files are reset to the release defaults below).
