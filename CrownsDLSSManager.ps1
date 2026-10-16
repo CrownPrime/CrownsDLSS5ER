@@ -290,7 +290,8 @@ $trkIntensity.Minimum = 0; $trkIntensity.Maximum = 200; $trkIntensity.TickFreque
 $trkIntensity.SetBounds(112, 102, 300, 40); $trkIntensity.BackColor = $Theme.Card; $nr.Controls.Add($trkIntensity)
 $lblIntensity = New-Label $nr '1.00' 420 110 $Theme.Gold
 $trkIntensity.Add_ValueChanged({ $lblIntensity.Text = ($trkIntensity.Value / 100).ToString('0.00') })
-New-Label $nr 'More passes / higher intensity cost more GPU time. 1.00 = model default.' 14 156 $Theme.Muted | Out-Null
+New-Label $nr '(Just a starting point - fine-tune it live in game with Insert.)' 14 148 $Theme.Gold | Out-Null
+New-Label $nr 'More passes / higher intensity cost more GPU time. 1.00 = model default.' 14 170 $Theme.Muted | Out-Null
 
 $menu = New-Card 'In-game menu' 502 584 482 108
 New-Label $menu 'OptiScaler menu key' 14 42 $Theme.Muted | Out-Null
