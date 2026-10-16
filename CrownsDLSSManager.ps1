@@ -1,5 +1,5 @@
 <#
-  CrownsDLSS5ER manager - black-and-gold manager for DLSS 5 in ELDEN RING: ReShade + EldenRingDLSS add-on (real
+  CrownsDLSS5ER manager for DLSS 5 in ELDEN RING: ReShade + EldenRingDLSS add-on (real
   DLSS in place of TAA) + OptiScaler DLSS-NR fork, loaded by me3. Installs, launches, tunes and diagnoses it.
   Files come from .\pack; settings are written to the installed EldenRingDLSS.ini and OptiScaler.ini.
 #>
