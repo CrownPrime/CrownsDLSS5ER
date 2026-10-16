@@ -4,6 +4,10 @@ DLSS 5 for ELDEN RING. Hooked in at the right place.
 
 *by CrownPrime*
 
+![The in-game DLSS 5 menu](docs/images/ingame-menu.jpg)
+
+![The manager](docs/images/manager.png)
+
 ## Why
 
 Generic DLSS 5 tools run the model on the finished frame. In Elden Ring that means the HUD goes through it too, and
