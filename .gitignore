@@ -1,0 +1,18 @@
+# Binaries are shipped in GitHub Releases, never committed.
+pack/files/
+pack/me3/
+*.dll
+*.asi
+*.addon64
+*.exe
+*.zip
+
+# NVIDIA's DLSS 5 model is not redistributable - never commit it anywhere.
+nvngx_dlssnr*.dll
+
+# Per-user state written by the manager.
+config.txt
+mods.txt
+product.txt
+install-paths.txt
+dist/

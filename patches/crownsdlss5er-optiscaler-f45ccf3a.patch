@@ -1,0 +1,195 @@
+From 63014c2f55328b72a9400ac4b01bb84f4aa61b07 Mon Sep 17 00:00:00 2001
+From: CrownPrime <228779844+CrownPrime@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 20:15:44 +0530
+Subject: [PATCH] CrownsDLSS5ER branding for the in-game menu
+
+Adds a CrownsDLSS5ER header with the CrownPrime emblem drawn as ImGui shapes,
+prefixes the main window title, and switches the dark theme to warm black,
+cream text and dark-gold borders. The DLSS-NR model node, timing bar and
+running indicator use gold instead of green. Settings and behaviour are
+unchanged. Based on f45ccf3a (the v0.8.91 build).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ OptiScaler/dlssnr/DlssNr_Menu.cpp     |  4 +-
+ OptiScaler/dlssnr/DlssNr_PipelineUi.h |  4 +-
+ OptiScaler/menu/menu_common.cpp       | 95 ++++++++++++++++++++++++---
+ 3 files changed, 89 insertions(+), 14 deletions(-)
+
+diff --git a/OptiScaler/dlssnr/DlssNr_Menu.cpp b/OptiScaler/dlssnr/DlssNr_Menu.cpp
+index 1e51aeb0..ca28cf0f 100644
+--- a/OptiScaler/dlssnr/DlssNr_Menu.cpp
++++ b/OptiScaler/dlssnr/DlssNr_Menu.cpp
+@@ -96,10 +96,10 @@ static void RenderStatus(Config* config)
+         // Hiding the edit keeps model evaluation running.
+         const char* runSuffix = !config->DlssNrApplyModel.value_or_default() ? "  (model running, edit hidden)" : "";
+ 
+-        // Keep the running indicator green, using the theme's HDR-adjusted text brightness.
++        // Keep the running indicator gold (CrownPrime), using the theme's HDR-adjusted text brightness.
+         const auto textColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+         ImGui::PushStyleColor(ImGuiCol_Text,
+-                              ImVec4(textColor.x * 0.55f, textColor.y * 0.80f, textColor.z * 0.55f, textColor.w));
++                              ImVec4(textColor.x * 0.92f, textColor.y * 0.76f, textColor.z * 0.44f, textColor.w));
+         if (ms.has_value())
+             ImGui::Text("Running%s - %.2f ms elapsed%s", vulkan ? " natively on Vulkan" : "", ms.value(), runSuffix);
+         else if (vulkan)
+diff --git a/OptiScaler/dlssnr/DlssNr_PipelineUi.h b/OptiScaler/dlssnr/DlssNr_PipelineUi.h
+index 45e063ed..e00f63df 100644
+--- a/OptiScaler/dlssnr/DlssNr_PipelineUi.h
++++ b/OptiScaler/dlssnr/DlssNr_PipelineUi.h
+@@ -74,7 +74,7 @@ inline void DrawTimingBar(double nrMs, double frameMs)
+     const bool overlapping = nrMs > frameMs;
+     ImGui::TextWrapped("NR %.2f ms  |  Rest of frame ~%.2f ms", nrMs, remaining);
+     const auto text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(text.x * 0.20f, text.y * 0.55f, text.z * 0.25f, text.w));
++    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(text.x * 0.72f, text.y * 0.60f, text.z * 0.34f, text.w));
+     ImGui::ProgressBar(float(nrMs / std::max(frameMs, nrMs)), ImVec2(-1.0f, ImGui::GetFontSize()), "");
+     ImGui::PopStyleColor();
+     if (ImGui::IsItemHovered())
+@@ -220,7 +220,7 @@ inline void Draw(const View& view, Section& selected)
+         {
+             // Preserve the theme's HDR brightness and interaction states, changing only the hue.
+             const float brightness = std::max({ fill.x, fill.y, fill.z });
+-            fill = ImVec4(brightness * 0.20f, brightness * 0.65f, brightness * 0.30f, fill.w);
++            fill = ImVec4(brightness * 0.66f, brightness * 0.52f, brightness * 0.24f, fill.w); // CrownPrime gold
+         }
+         draw->AddRectFilled(at, ImVec2(at.x + nodeWidth, at.y + height), ImGui::GetColorU32(fill),
+                             ImGui::GetStyle().FrameRounding);
+diff --git a/OptiScaler/menu/menu_common.cpp b/OptiScaler/menu/menu_common.cpp
+index 5f958ae1..488100c9 100644
+--- a/OptiScaler/menu/menu_common.cpp
++++ b/OptiScaler/menu/menu_common.cpp
+@@ -75,6 +75,79 @@ static bool hasGamepad = false;
+ static bool ffxInitTried = false;
+ static bool xefgInitTried = false;
+ static std::string windowTitle;
++
++// CrownPrime branding: the emblem (gold diamond with crown, chevrons and heart) drawn with ImGui shapes, so it
++// needs no texture and renders the same on every graphics API.
++static void DrawCrownPrimeEmblem(ImDrawList* dl, ImVec2 o, float h, ImU32 gold, ImU32 dark)
++{
++    const float w = h * 0.60f;
++    auto P = [&](float x, float y) { return ImVec2(o.x + x * w, o.y + y * h); };
++    auto Line = [&](std::initializer_list<ImVec2> pts, float f, bool closed)
++    {
++        std::vector<ImVec2> v(pts);
++        dl->AddPolyline(v.data(), (int) v.size(), gold, closed ? ImDrawFlags_Closed : ImDrawFlags_None,
++                        std::max(1.0f, h * f));
++    };
++    auto Quad = [&](ImVec2 a, ImVec2 b, ImVec2 c, ImVec2 d, ImU32 col)
++    {
++        ImVec2 q[4] = { a, b, c, d };
++        dl->AddConvexPolyFilled(q, 4, col);
++    };
++
++    // Double diamond.
++    Quad(P(0.50f, 0.00f), P(1.00f, 0.47f), P(0.50f, 1.00f), P(0.00f, 0.47f), dark);
++    Line({ P(0.50f, 0.00f), P(1.00f, 0.47f), P(0.50f, 1.00f), P(0.00f, 0.47f) }, 0.035f, true);
++    Line({ P(0.50f, 0.07f), P(0.92f, 0.47f), P(0.50f, 0.93f), P(0.08f, 0.47f) }, 0.014f, true);
++
++    // Crown: V-bottomed band, horns reaching past the diamond, two bumps, centre spire and star.
++    ImVec2 band[5] = { P(0.10f, 0.40f), P(0.90f, 0.40f), P(0.84f, 0.46f), P(0.50f, 0.54f), P(0.16f, 0.46f) };
++    dl->AddConvexPolyFilled(band, 5, gold);
++    dl->AddTriangleFilled(P(0.10f, 0.41f), P(0.27f, 0.41f), P(0.00f, 0.29f), gold);
++    dl->AddTriangleFilled(P(0.73f, 0.41f), P(0.90f, 0.41f), P(1.00f, 0.29f), gold);
++    dl->AddTriangleFilled(P(0.24f, 0.41f), P(0.38f, 0.41f), P(0.31f, 0.33f), gold);
++    dl->AddTriangleFilled(P(0.62f, 0.41f), P(0.76f, 0.41f), P(0.69f, 0.33f), gold);
++    dl->AddTriangleFilled(P(0.42f, 0.41f), P(0.58f, 0.41f), P(0.50f, 0.24f), gold);
++    Quad(P(0.50f, 0.15f), P(0.535f, 0.205f), P(0.50f, 0.26f), P(0.465f, 0.205f), gold);
++    Quad(P(0.43f, 0.205f), P(0.50f, 0.19f), P(0.57f, 0.205f), P(0.50f, 0.22f), gold);
++    for (float x : { 0.38f, 0.50f, 0.62f })
++        dl->AddCircleFilled(P(x, 0.445f), h * 0.016f, dark);
++
++    // Chevrons under the crown.
++    Line({ P(0.14f, 0.52f), P(0.50f, 0.615f), P(0.86f, 0.52f) }, 0.018f, false);
++    Line({ P(0.20f, 0.575f), P(0.50f, 0.67f), P(0.80f, 0.575f) }, 0.014f, false);
++
++    // Inner diamond holding the heart.
++    Line({ P(0.50f, 0.66f), P(0.68f, 0.775f), P(0.50f, 0.89f), P(0.32f, 0.775f) }, 0.013f, true);
++    const float r = h * 0.028f;
++    const ImVec2 l = P(0.465f, 0.765f), rr = P(0.535f, 0.765f);
++    dl->AddCircleFilled(l, r, gold);
++    dl->AddCircleFilled(rr, r, gold);
++    dl->AddTriangleFilled(ImVec2(l.x - r, l.y + r * 0.3f), ImVec2(rr.x + r, rr.y + r * 0.3f), P(0.50f, 0.835f), gold);
++}
++
++// Header row at the top of the main menu: emblem, CrownsDLSS5ER and a short subtitle.
++static void RenderCrownPrimeHeader()
++{
++    const float fontSize = ImGui::GetFontSize();
++    const float h = fontSize * 3.2f;
++    const ImU32 gold = IM_COL32(212, 168, 83, 255);
++    const ImVec2 o = ImGui::GetCursorScreenPos();
++    DrawCrownPrimeEmblem(ImGui::GetWindowDrawList(), o, h, gold, IM_COL32(10, 9, 8, 255));
++    ImGui::Dummy(ImVec2(h * 0.60f, h));
++    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x * 2.0f);
++
++    ImGui::BeginGroup();
++    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + h * 0.10f);
++    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.83f, 0.66f, 0.33f, 1.00f));
++    ImGui::PushFontSize(std::round(fontSize * 1.7f));
++    ImGui::TextUnformatted("CrownsDLSS5ER");
++    ImGui::PopFontSize();
++    ImGui::PopStyleColor();
++    ImGui::TextDisabled("DLSS 5 neural rendering  |  powered by OptiScaler");
++    ImGui::EndGroup();
++    ImGui::Separator();
++}
++
+ static std::string selectedUpscalerName = "";
+ static Upscaler currentBackend = Upscaler::Reset;
+ static std::string currentBackendName = "";
+@@ -1201,14 +1274,14 @@ void MenuCommon::ApplyThemeStyle()
+ 
+     float luminance = Luminance(accent);
+ 
+-    const ImVec4 bgDark = lightTheme ? ImVec4(0.80f, 0.82f, 0.86f, 1.00f) : ImVec4(0.09f, 0.09f, 0.10f, 1.00f);
+-    const ImVec4 bgMid = lightTheme ? ImVec4(0.89f, 0.91f, 0.95f, 1.00f) : ImVec4(0.11f, 0.11f, 0.12f, 1.00f);
+-    const ImVec4 bgLight = lightTheme ? ImVec4(0.96f, 0.97f, 0.99f, 1.00f) : ImVec4(0.14f, 0.14f, 0.15f, 1.00f);
++    const ImVec4 bgDark = lightTheme ? ImVec4(0.80f, 0.82f, 0.86f, 1.00f) : ImVec4(0.055f, 0.050f, 0.045f, 1.00f);
++    const ImVec4 bgMid = lightTheme ? ImVec4(0.89f, 0.91f, 0.95f, 1.00f) : ImVec4(0.080f, 0.072f, 0.062f, 1.00f);
++    const ImVec4 bgLight = lightTheme ? ImVec4(0.96f, 0.97f, 0.99f, 1.00f) : ImVec4(0.115f, 0.102f, 0.085f, 1.00f);
+ 
+-    const ImVec4 textPrimary = lightTheme ? ImVec4(0.05f, 0.06f, 0.08f, 1.00f) : ImVec4(0.90f, 0.93f, 0.95f, 1.00f);
+-    const ImVec4 textDim = lightTheme ? ImVec4(0.22f, 0.25f, 0.31f, 1.00f) : ImVec4(0.54f, 0.58f, 0.62f, 1.00f);
++    const ImVec4 textPrimary = lightTheme ? ImVec4(0.05f, 0.06f, 0.08f, 1.00f) : ImVec4(0.93f, 0.88f, 0.77f, 1.00f);
++    const ImVec4 textDim = lightTheme ? ImVec4(0.22f, 0.25f, 0.31f, 1.00f) : ImVec4(0.62f, 0.56f, 0.46f, 1.00f);
+ 
+-    const ImVec4 borderCol = lightTheme ? ImVec4(0.35f, 0.40f, 0.50f, 1.00f) : ImVec4(0.24f, 0.24f, 0.26f, 1.00f);
++    const ImVec4 borderCol = lightTheme ? ImVec4(0.35f, 0.40f, 0.50f, 1.00f) : ImVec4(0.42f, 0.33f, 0.17f, 1.00f);
+     const ImVec4 dimBg = lightTheme ? ImVec4(0.30f, 0.33f, 0.38f, 0.20f) : ImVec4(0.09f, 0.10f, 0.13f, 0.20f);
+     const ImVec4 modalDimBg = lightTheme ? ImVec4(0.22f, 0.24f, 0.28f, 0.55f) : ImVec4(0.04f, 0.04f, 0.07f, 0.55f);
+ 
+@@ -6446,9 +6519,9 @@ void MenuCommon::RenderThemeSettings(RenderMenuContext& ctx)
+ 
+         bool lightTheme = config->LightTheme.value_or_default();
+ 
+-        const ImVec4 bgDark = lightTheme ? ImVec4(0.80f, 0.82f, 0.86f, 1.00f) : ImVec4(0.09f, 0.09f, 0.10f, 1.00f);
+-        const ImVec4 bgMid = lightTheme ? ImVec4(0.89f, 0.91f, 0.95f, 1.00f) : ImVec4(0.11f, 0.11f, 0.12f, 1.00f);
+-        const ImVec4 bgLight = lightTheme ? ImVec4(0.96f, 0.97f, 0.99f, 1.00f) : ImVec4(0.14f, 0.14f, 0.15f, 1.00f);
++        const ImVec4 bgDark = lightTheme ? ImVec4(0.80f, 0.82f, 0.86f, 1.00f) : ImVec4(0.055f, 0.050f, 0.045f, 1.00f);
++        const ImVec4 bgMid = lightTheme ? ImVec4(0.89f, 0.91f, 0.95f, 1.00f) : ImVec4(0.080f, 0.072f, 0.062f, 1.00f);
++        const ImVec4 bgLight = lightTheme ? ImVec4(0.96f, 0.97f, 0.99f, 1.00f) : ImVec4(0.115f, 0.102f, 0.085f, 1.00f);
+ 
+         auto Mix = [](const ImVec4& a, const ImVec4& b, float t, float alpha = 1.0f)
+         { return ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, alpha); };
+@@ -7919,13 +7992,15 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
+     // Main menu window
+     if (windowTitle.empty())
+     {
+-        windowTitle = StrFmt("%s - %s %s %s %s", BuildInfo::ProductName(), state.gameExe.c_str(),
++        windowTitle = StrFmt("CrownsDLSS5ER  |  %s - %s %s %s %s", BuildInfo::ProductName(), state.gameExe.c_str(),
+                              state.gameName.empty() ? "" : StrFmt("- %s", state.gameName.c_str()).c_str(),
+                              (state.detectedQuirks.size() > 0) ? "(Q)" : "", state.isOptiPatcherSucceed ? "(OP)" : "");
+     }
+ 
+     if (ImGui::Begin(windowTitle.c_str(), NULL, flags))
+     {
++        RenderCrownPrimeHeader();
++
+         // Header/status messages shown above the two-column settings table.
+         RenderMainMenuHeaderMessages(ctx);
+ 
+-- 
+2.52.0.windows.1
+
