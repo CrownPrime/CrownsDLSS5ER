@@ -13,10 +13,11 @@ DLSS 5 for ELDEN RING. Hooked in at the right place.
 Generic DLSS 5 tools run the model on the finished frame. In Elden Ring that means the HUD goes through it too, and
 motion has to be guessed. Result: smeared UI, ghosting.
 
-This runs DLSS 5 at the game's own TAA pass, so:
+This runs DLSS 5 at the game's own TAA pass, through Mason Petrosky's
+[EldenRingDLSS](https://github.com/masonpetrosky/EldenRingDLSS) add-on, so:
 
 - the UI is drawn after, and stays clean
-- it gets real motion vectors and depth, including grass and trees
+- it gets real motion vectors and depth, including grass and trees (the add-on generates those; the game doesn't)
 - the TAA is replaced with actual DLSS, so DLSS 5 starts from a clean image
 
 The EldenRingDLSS add-on and the OptiScaler DLSS-NR fork didn't run together out of the box. Two fixes:
