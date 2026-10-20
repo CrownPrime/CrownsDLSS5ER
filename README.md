@@ -64,6 +64,8 @@ pick the pack and its folder, then PLAY. The pack runs through its own me3, with
 adds the DLSS 5 setup to a copy of the pack's profile, and the pack's own files stay as they are. Don't add a mod pack
 under YOUR MODS: its mod folder alone leaves out its DLL mods, so dodging, items and weapon switching stop working.
 
+![Play with: Elden Ring, The Convergence or Golden Age](docs/images/play-with.png)
+
 ## Notes
 
 - Offline only, no EAC. Seamless Co-op is fine.
