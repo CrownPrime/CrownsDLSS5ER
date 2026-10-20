@@ -70,14 +70,6 @@ Included support for large overhaul mods: Convergence and Golden Age.
 - No Steam? Install with `pack\Install-Vanilla.ps1 -GameDir "...\Game" -SkipSteamInit`.
 - DLSS 5 here is an unofficial NVIDIA feature. Experimental.
 
-## Build
-
-```
-powershell -ExecutionPolicy Bypass -File tools\Build-Release.ps1 -Source "<pack>" -Version 1.0.0
-```
-
-Strips the model and anything personal. Binaries live in Releases, not git.
-
 ## Credits
 
 [EldenRingDLSS](https://github.com/masonpetrosky/EldenRingDLSS) (Mason Petrosky) ·
