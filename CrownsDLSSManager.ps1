@@ -612,7 +612,7 @@ function Run([scriptblock]$action) {
 
 function Pick-Folder([System.Windows.Forms.TextBox]$box, [string]$desc) {
   $d = New-Object System.Windows.Forms.FolderBrowserDialog
-  $d.Description = $desc; if (Test-Path $box.Text) { $d.SelectedPath = $box.Text }
+  $d.Description = $desc; if ($box.Text.Trim() -and (Test-Path $box.Text)) { $d.SelectedPath = $box.Text }
   if ($d.ShowDialog() -eq 'OK') { $box.Text = $d.SelectedPath; Refresh-All; Save-Config $cfg }
 }
 
