@@ -70,10 +70,6 @@ Included support for large overhaul mods: Convergence and Golden Age.
 - No Steam? Install with `pack\Install-Vanilla.ps1 -GameDir "...\Game" -SkipSteamInit`.
 - DLSS 5 here is an unofficial NVIDIA feature. Experimental.
 
-## Next
-
-More FromSoftware games on me3 (Nightreign, AC6, DS3), tested presets, and getting the fixes upstream.
-
 ## Build
 
 ```
