@@ -1,6 +1,7 @@
 <#
   CrownsDLSS5ER manager for DLSS 5 in ELDEN RING: ReShade + EldenRingDLSS add-on (real
   DLSS in place of TAA) + OptiScaler DLSS-NR fork, loaded by me3. Installs, launches, tunes and diagnoses it.
+  Plays the normal game (with YOUR MODS) or an overhaul mod pack that has its own me3 (The Convergence, Golden Age).
   Files come from .\pack; settings are written to the installed EldenRingDLSS.ini and OptiScaler.ini.
 #>
 param([string]$GameDir = '', [switch]$SelfTest, [string]$Screenshot = '')
@@ -24,6 +25,13 @@ function Find-EldenRingGame {
 }
 $DefaultGame = Find-EldenRingGame
 $ProductName = 'Elden Ring'
+
+# Overhaul mod packs that ship their own me3 and profile. PLAY runs one through its own me3, with a copy of its
+# profile that adds the DLSS 5 setup (pack\Write-PackProfile.ps1). Paths are relative to the pack's folder.
+$Packs = [ordered]@{
+  'The Convergence' = @{ Id = 'Convergence'; Key = 'ConvergenceDir'; Profile = 'me3\convergence.me3'; Me3 = 'me3\Windows\me3.exe'; Args = ' --skip-steam-init true'; Folder = 'the ConvergenceER folder' }
+  'Golden Age' = @{ Id = 'GoldenAge'; Key = 'GoldenAgeDir'; Profile = 'Start_GoldenAge.me3'; Me3 = 'me3\bin\me3.exe'; Args = ''; Folder = 'the Golden Age folder (with Start_GoldenAge.bat)' }
+}
 
 # --- INI helpers (section-aware, keep the rest of the file and its line endings) ----------------------------
 
@@ -69,7 +77,7 @@ function Set-IniValues([string]$path, [string]$section, [hashtable]$values) {
 # --- Paths, state ------------------------------------------------------------------------------------------
 
 function Load-Config {
-  $cfg = @{ GameDir = $DefaultGame }
+  $cfg = @{ GameDir = $DefaultGame; Play = 'Elden Ring' }
   if (Test-Path $ConfigFile) {
     foreach ($l in Get-Content $ConfigFile) { if ($l -match '^(\w+)=(.*)$') { $cfg[$Matches[1]] = $Matches[2] } }
   }
@@ -77,7 +85,18 @@ function Load-Config {
   $cfg
 }
 
-function Save-Config($cfg) { "GameDir=$($cfg.GameDir)" | Set-Content $ConfigFile -Encoding UTF8 }
+function Save-Config($cfg) { $cfg.Keys | Sort-Object | ForEach-Object { "$_=$($cfg[$_])" } | Set-Content $ConfigFile -Encoding UTF8 }
+
+# The mod pack picked under Play, or $null for the normal game.
+function Get-Pack($cfg) {
+  if (-not $Packs.Contains([string]$cfg.Play)) { return $null }
+  $d = $Packs[[string]$cfg.Play]; $dir = [string]$cfg[$d.Key]
+  [pscustomobject]@{
+    Name = [string]$cfg.Play; Id = $d.Id; Key = $d.Key; Folder = $d.Folder; Args = $d.Args; Dir = $dir
+    Profile = if ($dir) { Join-Path $dir $d.Profile } else { '' }
+    Me3 = if ($dir) { Join-Path $dir $d.Me3 } else { '' }
+  }
+}
 
 function Get-Paths($cfg) {
   # Not chosen yet (first run without a Steam install): a placeholder path that simply does not exist.
@@ -109,6 +128,10 @@ function Get-StatusLines($cfg) {
   $out += if ($model) { 'DLSS 5 model: found' } else { 'DLSS 5 model: MISSING - add your nvngx_dlssnr.dll (README)' }
   $state = if (Test-Path $p.Manifest) { 'installed' } elseif ((Test-Path $p.Launcher) -and (Test-Path $p.AddonIni)) { 'set up by hand (Install / Repair registers it)' } else { 'not installed' }
   $out += "DLSS 5 setup: $state"
+  $pk = Get-Pack $cfg
+  if ($pk) {
+    $out += if ($pk.Dir -and (Test-Path $pk.Profile) -and (Test-Path $pk.Me3)) { "Mod pack:     $($pk.Name) found" } else { "Mod pack:     $($pk.Name) NOT FOUND - pick $($pk.Folder)" }
+  }
   if (Test-GameRunning $p) { $out += 'Game is RUNNING - close it to install or change settings.' }
   $out
 }
@@ -245,25 +268,29 @@ $setup = New-Card 'Setup' 16 128 470 268
 New-Label $setup 'Elden Ring game folder (with eldenring.exe)' 14 38 $Theme.Muted | Out-Null
 $txtGame = New-Field $setup 14 58 350; $txtGame.Text = $cfg.GameDir
 $btnGame = New-GoldButton $setup 'Browse' 372 56 84 28
-$lblInfo = New-Label $setup 'Installs its own me3 and the ReShade add-on into a CrownsDLSS5 folder next to Game. Launches the game offline (no Easy Anti-Cheat) with your normal save.' 14 90 $Theme.Muted
-$lblInfo.AutoSize = $false; $lblInfo.SetBounds(14, 90, 442, 52)
-$lblStatus = New-Label $setup '' 14 150; $lblStatus.Font = New-Object System.Drawing.Font('Consolas', 9); $lblStatus.AutoSize = $false; $lblStatus.SetBounds(14, 148, 442, 70)
+$lblInfo = New-Label $setup 'Installs its own me3 and the ReShade add-on into a CrownsDLSS5 folder next to Game. Launches the game offline (no Easy Anti-Cheat).' 14 90 $Theme.Muted
+$lblInfo.AutoSize = $false; $lblInfo.SetBounds(14, 90, 442, 36)
+$lblStatus = New-Label $setup '' 14 130; $lblStatus.Font = New-Object System.Drawing.Font('Consolas', 9); $lblStatus.AutoSize = $false; $lblStatus.SetBounds(14, 130, 442, 88)
 $btnInstall = New-GoldButton $setup 'Install / Repair' 14 222 214 34
 $btnUninstall = New-GoldButton $setup 'Uninstall' 242 222 214 34
 
-$play = New-Card 'Play' 16 408 470 104
-$btnPlay = New-GoldButton $play 'PLAY ELDEN RING' 14 36 442 52 $true
-$btnMods = New-GoldButton $play 'YOUR MODS' 318 36 138 52
-$btnPlay.Width = 294
+$play = New-Card 'Play' 16 408 470 152
+New-Label $play 'Play with' 14 40 $Theme.Muted | Out-Null
+$cmbPlay = New-Combo $play (@('Elden Ring') + @($Packs.Keys)) 86 36 170
+$lblPlay = New-Label $play '' 266 40 $Theme.Muted
+$txtPack = New-Field $play 14 70 350
+$btnPack = New-GoldButton $play 'Browse' 372 68 84 28
+$btnPlay = New-GoldButton $play 'PLAY ELDEN RING' 14 104 294 38 $true
+$btnMods = New-GoldButton $play 'YOUR MODS' 318 104 138 38
 
-$diag = New-Card 'Diagnostics' 16 524 470 220
+$diag = New-Card 'Diagnostics' 16 572 470 172
 $txtDiag = New-Object System.Windows.Forms.TextBox
 $txtDiag.Multiline = $true; $txtDiag.ReadOnly = $true; $txtDiag.ScrollBars = 'Vertical'; $txtDiag.BorderStyle = 'None'
 $txtDiag.BackColor = $Theme.Field; $txtDiag.ForeColor = $Theme.Text; $txtDiag.Font = New-Object System.Drawing.Font('Consolas', 8.5)
-$txtDiag.SetBounds(14, 36, 442, 132); $diag.Controls.Add($txtDiag)
-$btnDiag = New-GoldButton $diag 'Check last run' 14 176 140
-$btnRsLog = New-GoldButton $diag 'ReShade.log' 164 176 140
-$btnOptiLog = New-GoldButton $diag 'OptiScaler.log' 316 176 140
+$txtDiag.SetBounds(14, 36, 442, 86); $diag.Controls.Add($txtDiag)
+$btnDiag = New-GoldButton $diag 'Check last run' 14 130 140
+$btnRsLog = New-GoldButton $diag 'ReShade.log' 164 130 140
+$btnOptiLog = New-GoldButton $diag 'OptiScaler.log' 316 130 140
 
 # Right column: settings ---------------------------------------------------------------------------------------
 $dlss = New-Card 'DLSS  (replaces the game''s TAA)' 502 128 482 236
@@ -334,7 +361,7 @@ function Get-ModWarning([string]$kind, [string]$path) {
       return "$name looks like a ReShade / upscaler mod. This setup already provides ReShade, DLSS and DLSS 5; a second one will clash."
     }
   } else {
-    if (Get-ChildItem $path -Filter '*.me3' -File -ErrorAction SilentlyContinue) { return 'This folder contains an .me3 profile - it looks like a whole mod pack. Pick the mod folder inside it (the one with chr / parts / regulation.bin ...).' }
+    if (Get-ChildItem $path -Filter '*.me3' -File -ErrorAction SilentlyContinue) { return 'This folder contains an .me3 profile - it looks like a whole mod pack. The Convergence / Golden Age: pick them under Play with instead (their mod folder alone leaves out their DLL mods, which breaks dodge, items and weapon switching). Other packs: pick the mod folder inside it.' }
     if (Test-Path (Join-Path $path 'config_eldenring.toml')) { return 'This is a Mod Engine 2 install. Pick its mod folder (usually "mod") instead.' }
     if (Test-Path (Join-Path $path 'eldenring.exe')) { return 'This is the game folder itself, not a mod folder.' }
   }
@@ -561,8 +588,17 @@ function Write-Settings {
   'Settings saved. They apply the next time you start the game.'
 }
 
+function Update-PlayUi {
+  $pk = Get-Pack $cfg
+  $txtPack.Enabled = [bool]$pk; $btnPack.Enabled = [bool]$pk; $btnMods.Enabled = -not $pk
+  $txtPack.Text = if ($pk) { $pk.Dir } else { '' }
+  $lblPlay.Text = if ($pk) { "its own mods and save" } else { 'normal game + YOUR MODS' }
+  $btnPlay.Text = if ($pk) { "PLAY $($pk.Name.ToUpper())" } else { 'PLAY ELDEN RING' }
+}
+
 function Refresh-All {
   $cfg.GameDir = $txtGame.Text.Trim()
+  $pk = Get-Pack $cfg; if ($pk) { $cfg[$pk.Key] = $txtPack.Text.Trim() }
   $lblStatus.Text = (Get-StatusLines $cfg) -join "`r`n"
   try { Read-Settings } catch { $txtDiag.Text = "Could not read settings: $($_.Exception.Message)" }
 }
@@ -582,6 +618,10 @@ function Pick-Folder([System.Windows.Forms.TextBox]$box, [string]$desc) {
 
 $btnGame.Add_Click({ Pick-Folder $txtGame 'Pick the Elden Ring folder that contains eldenring.exe' })
 $txtGame.Add_Leave({ Refresh-All; Save-Config $cfg })
+$btnPack.Add_Click({ Pick-Folder $txtPack "Pick $((Get-Pack $cfg).Folder)" })
+$txtPack.Add_Leave({ Refresh-All; Save-Config $cfg })
+$cmbPlay.SelectedIndex = [Math]::Max(0, $cmbPlay.Items.IndexOf([string]$cfg.Play))
+$cmbPlay.Add_SelectedIndexChanged({ $cfg.Play = [string]$cmbPlay.SelectedItem; Update-PlayUi; Refresh-All; Save-Config $cfg })
 
 $btnInstall.Add_Click({
   Run {
@@ -608,8 +648,34 @@ $btnPlay.Add_Click({
   Run {
     $p = Get-Paths $cfg
     if (-not (Test-Path $p.Launcher)) { throw 'Install first.' }
-    Start-Process -FilePath $p.Launcher -WorkingDirectory $p.Root
-    "Starting $ProductName with DLSS 5...`r`nIn game: Insert = DLSS 5 menu, Home = ReShade / DLSS, F9 = DLSS on/off."
+    $pk = Get-Pack $cfg
+    if (-not $pk) {
+      Start-Process -FilePath $p.Launcher -WorkingDirectory $p.Root
+      return "Starting $ProductName with DLSS 5...`r`nIn game: Insert = DLSS 5 menu, Home = ReShade / DLSS, F9 = DLSS on/off."
+    }
+    if (-not ($pk.Dir -and (Test-Path $pk.Profile) -and (Test-Path $pk.Me3))) { throw "$($pk.Name) not found. Pick $($pk.Folder)." }
+    # The launcher rewrites the pack profile copy each time (the pack may have been updated), then starts the pack's
+    # own me3 with it. It stays open with the error if either step fails.
+    Copy-Item (Join-Path $Pack 'Write-PackProfile.ps1') $p.Root -Force
+    $merged = Join-Path (Split-Path -Parent $pk.Profile) ([System.IO.Path]::GetFileNameWithoutExtension($pk.Profile) + ' - CrownsDLSS5.me3')
+    $launcher = Join-Path $p.Root "Start_$($pk.Id)_DLSS5.bat"
+    @"
+@echo off
+cd /d "$($pk.Dir)"
+echo Launching $($pk.Name) with DLSS + DLSS 5 (neural rendering)...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Write-PackProfile.ps1" -GameDir "$($cfg.GameDir)" -BaseProfile "$($pk.Profile)" -OutProfile "$merged"
+if errorlevel 1 goto :failed
+"$($pk.Me3)" launch --exe "$($p.Exe)"$($pk.Args) --profile "$merged"
+if errorlevel 1 goto :failed
+exit /b 0
+:failed
+echo.
+pause
+exit /b 1
+"@ | Set-Content -Path $launcher -Encoding ASCII
+    if (-not (Get-Content $p.Manifest | Where-Object { $_ -eq $launcher })) { Add-Content $p.Manifest -Value $launcher -Encoding UTF8 }
+    Start-Process -FilePath $launcher -WorkingDirectory $pk.Dir
+    "Starting $($pk.Name) with DLSS 5 (its own mods and save, through its own me3)...`r`nIn game: Insert = DLSS 5 menu, Home = ReShade / DLSS, F9 = DLSS on/off."
   }
 })
 $btnDiag.Add_Click({ Run { Get-Diagnosis $cfg } })
@@ -620,6 +686,7 @@ $btnOptiLog.Add_Click({ $p = Get-Paths $cfg; if (Test-Path $p.OptiLog) { Start-P
 $btnSave.Add_Click({ Run { Write-Settings } })
 $btnReload.Add_Click({ Refresh-All; $txtDiag.Text = 'Settings reloaded from the game files.' })
 
+Update-PlayUi
 Refresh-All
 $txtDiag.Text = try { Get-Diagnosis $cfg } catch { '' }
 if ($SelfTest) { $form.Dispose(); 'GUI built OK'; return }
