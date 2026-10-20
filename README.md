@@ -4,6 +4,8 @@ DLSS 5 for ELDEN RING. Hooked in at the right place.
 
 *by CrownPrime*
 
+[![Watch: Elden Ring DLSS 5 Done Right.](https://img.youtube.com/vi/ZTh978tdo4c/maxresdefault.jpg)](https://youtu.be/ZTh978tdo4c)
+
 ![The in-game DLSS 5 menu](docs/images/ingame-menu.jpg)
 
 ![The manager](docs/images/manager.png)
