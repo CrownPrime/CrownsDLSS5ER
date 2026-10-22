@@ -49,7 +49,7 @@ If a hash doesn't match, don't use it. Without the model you still get DLSS, jus
 ## Use
 
 1. Extract the [release](../../releases) zip and add the model.
-2. Run `CrownsDLSS5ER.bat`.
+2. Run `CrownsDLSS5ER.exe`.
 3. **Install / Repair**, then **PLAY**.
 
 `Insert` DLSS 5 menu · `Home` ReShade / DLSS · `F9` DLSS on/off

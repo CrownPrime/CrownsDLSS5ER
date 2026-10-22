@@ -25,10 +25,30 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
 
 # Repository content.
-foreach ($item in @('CrownsDLSSManager.ps1', 'CrownsDLSS5ER.bat',
+foreach ($item in @('CrownsDLSSManager.ps1',
     'README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'assets', 'docs', 'licenses', 'patches', 'pack')) {
   Copy-Item (Join-Path $repo $item) $stage -Recurse -Force
 }
+
+# CrownsDLSS5ER.exe: the launcher (tools\Launcher.cs) with the icon and this version, compiled with the C# compiler
+# that ships with Windows (.NET Framework 4).
+$csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+if (-not (Test-Path $csc)) { throw "C# compiler not found: $csc" }
+$info = Join-Path $dist 'LauncherInfo.cs'
+@(
+  'using System.Reflection;'
+  '[assembly: AssemblyTitle("CrownsDLSS5ER")]'
+  '[assembly: AssemblyDescription("Opens the CrownsDLSS5ER manager")]'
+  '[assembly: AssemblyProduct("CrownsDLSS5ER")]'
+  '[assembly: AssemblyCompany("CrownPrime")]'
+  "[assembly: AssemblyVersion(`"$Version.0`")]"
+  "[assembly: AssemblyFileVersion(`"$Version.0`")]"
+) | Set-Content $info -Encoding UTF8
+& $csc /nologo /target:winexe /platform:anycpu /optimize+ /reference:System.Windows.Forms.dll `
+  "/win32icon:$(Join-Path $repo 'assets\CrownsDLSS5ER.ico')" "/out:$(Join-Path $stage 'CrownsDLSS5ER.exe')" `
+  (Join-Path $repo 'tools\Launcher.cs') $info
+if ($LASTEXITCODE) { throw 'Compiling CrownsDLSS5ER.exe failed.' }
+Remove-Item $info
 # Binaries from the local pack (settings files are reset to the release defaults below).
 Copy-Item (Join-Path $Source 'files') (Join-Path $stage 'pack\files') -Recurse -Force
 Copy-Item (Join-Path $Source 'me3') (Join-Path $stage 'pack\me3') -Recurse -Force
