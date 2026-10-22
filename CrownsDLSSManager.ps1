@@ -325,15 +325,77 @@ $trkIntensity.Minimum = 0; $trkIntensity.Maximum = 200; $trkIntensity.TickFreque
 $trkIntensity.SetBounds(112, 102, 300, 40); $trkIntensity.BackColor = $Theme.Card; $nr.Controls.Add($trkIntensity)
 $lblIntensity = New-Label $nr '1.00' 420 110 $Theme.Gold
 $trkIntensity.Add_ValueChanged({ $lblIntensity.Text = ($trkIntensity.Value / 100).ToString('0.00') })
-New-Label $nr '(Just a starting point - fine-tune it live in game with Insert.)' 14 148 $Theme.Gold | Out-Null
+$lblNrHint = New-Label $nr '(Just a starting point - fine-tune it live in game with Insert.)' 14 148 $Theme.Gold
 New-Label $nr 'More passes / higher intensity cost more GPU time. 1.00 = model default.' 14 170 $Theme.Muted | Out-Null
 
-$menu = New-Card 'In-game menu' 502 584 482 108
-New-Label $menu 'OptiScaler menu key' 14 42 $Theme.Muted | Out-Null
-$keys = [ordered]@{ 'Insert' = '0x2D'; 'End' = '0x23'; 'Delete' = '0x2E'; 'Page Down' = '0x22'; 'F10' = '0x79'; 'F11' = '0x7A' }
-$cmbKey = New-Combo $menu @($keys.Keys) 160 38 120
-$chkSplash = New-Check $menu 'Hide startup splash' 300 40
-$chkFps = New-Check $menu 'FPS counter (Page Up toggles)' 14 72
+$menu = New-Card 'In-game keys' 502 584 482 108
+New-Label $menu 'OptiScaler menu' 14 42 $Theme.Muted | Out-Null
+New-Label $menu 'DLSS on/off' 14 76 $Theme.Muted | Out-Null
+$chkSplash = New-Check $menu 'Hide startup splash' 318 40
+$chkFps = New-Check $menu 'FPS counter' 318 74
+
+# --- Hotkeys: the OptiScaler menu key ([Menu] ShortcutKey, Ctrl / Alt allowed) and the DLSS on/off key (the add-on's
+# ToggleKey; DLSS 5 runs on DLSS, so it goes off too). Windows virtual-key codes. Click a key button, then press a key.
+# ReShade: its overlay key (ReShade.ini KeyOverlay); Fps: OptiScaler's FPS counter key. Neither may be reused.
+$KeyConf = @{ Opti = @{ Vk = 0x2D; Ctrl = $false; Alt = $false }; Dlss = @{ Vk = 0x78; Ctrl = $false; Alt = $false }; ReShade = 0x24; Fps = 0x21 }
+
+function Get-KeyName([int]$vk) {
+  $k = [System.Windows.Forms.Keys]$vk
+  $names = @{ 'Prior' = 'Page Up'; 'PageUp' = 'Page Up'; 'Next' = 'Page Down'; 'PageDown' = 'Page Down'; 'Back' = 'Backspace'
+    'Return' = 'Enter'; 'Capital' = 'Caps Lock'; 'CapsLock' = 'Caps Lock'
+    'Scroll' = 'Scroll Lock'; 'NumLock' = 'Num Lock'; 'Oemtilde' = '`'; 'OemMinus' = '-'; 'Oemplus' = '='; 'OemOpenBrackets' = '['
+    'Oem6' = ']'; 'Oem5' = '\'; 'Oem1' = ';'; 'Oem7' = "'"; 'Oemcomma' = ','; 'OemPeriod' = '.'; 'OemQuestion' = '/'
+    'Multiply' = 'Num *'; 'Add' = 'Num +'; 'Subtract' = 'Num -'; 'Divide' = 'Num /'; 'Decimal' = 'Num .'; 'Pause' = 'Pause' }
+  $n = [string]$k
+  if ($names.ContainsKey($n)) { return $names[$n] }
+  if ($n -match '^D(\d)$') { return $Matches[1] }
+  if ($n -match '^NumPad(\d)$') { return "Num $($Matches[1])" }
+  $n
+}
+function Format-Key($k) { $(if ($k.Ctrl) { 'Ctrl+' }) + $(if ($k.Alt) { 'Alt+' }) + (Get-KeyName $k.Vk) }
+function Read-KeyCode([string]$text, [int]$default) {
+  try { if ($text -match '^\s*0[xX]([0-9A-Fa-f]+)\s*$') { return [Convert]::ToInt32($Matches[1], 16) } elseif ($text -match '^\s*\d+\s*$') { return [int]$text } } catch { }
+  $default
+}
+
+# The hints elsewhere in the window name the keys that are set.
+function Update-KeyLabels {
+  $btnOptiKey.Text = Format-Key $KeyConf.Opti; $btnDlssKey.Text = Format-Key $KeyConf.Dlss
+  $chkDlss.Text = "Use DLSS instead of the game's TAA  ($(Format-Key $KeyConf.Dlss) in game)"
+  $lblNrHint.Text = "(Just a starting point - fine-tune it live in game with $(Format-Key $KeyConf.Opti).)"
+  $chkFps.Text = "FPS counter ($(Get-KeyName $KeyConf.Fps))"
+}
+function Get-KeysHint { "In game: $(Format-Key $KeyConf.Opti) = DLSS 5 menu, $(Get-KeyName $KeyConf.ReShade) = ReShade / DLSS, $(Format-Key $KeyConf.Dlss) = DLSS on/off." }
+
+function New-KeyButton($parent, [int]$x, [int]$y, [string]$which, [bool]$modifiers) {
+  $b = New-GoldButton $parent '' $x $y 160 30
+  $b.Tag = @{ Which = $which; Modifiers = $modifiers; Capturing = $false }
+  $b.Add_Click({ param($s) $s.Tag.Capturing = $true; $s.Text = 'Press a key... (Esc: cancel)' })
+  # While capturing, arrow keys, Tab and Enter reach KeyDown instead of moving the focus.
+  $b.Add_PreviewKeyDown({ param($s, $e) if ($s.Tag.Capturing) { $e.IsInputKey = $true } })
+  $b.Add_KeyDown({
+    param($s, $e)
+    if (-not $s.Tag.Capturing) { return }
+    $e.Handled = $true; $e.SuppressKeyPress = $true
+    $code = [int]$e.KeyCode
+    if (@(16, 17, 18, 91, 92) -contains $code) { return }  # Shift / Ctrl / Alt / Windows alone: wait for the key
+    $s.Tag.Capturing = $false
+    if ($code -eq 27) { Update-KeyLabels; return }
+    $taken = @{}
+    $uses = @(
+      @($KeyConf.ReShade, 'the ReShade / DLSS menu'), @($KeyConf.Fps, 'the FPS counter'),
+      $(if ($s.Tag.Which -eq 'Opti') { , @($KeyConf.Dlss.Vk, 'DLSS on/off') } else { , @($KeyConf.Opti.Vk, 'the OptiScaler menu') }))
+    foreach ($u in $uses) { if (-not $taken.ContainsKey($u[0])) { $taken[$u[0]] = $u[1] } }
+    if ($taken.ContainsKey($code)) { $txtDiag.Text = "$(Get-KeyName $code) is already used by $($taken[$code]). Pick another key."; Update-KeyLabels; return }
+    $KeyConf[$s.Tag.Which] = @{ Vk = $code; Ctrl = $s.Tag.Modifiers -and $e.Control; Alt = $s.Tag.Modifiers -and $e.Alt }
+    Update-KeyLabels
+    $txtDiag.Text = "Key set to $(Format-Key $KeyConf[$s.Tag.Which]). Click SAVE SETTINGS to apply it."
+  })
+  $b.Add_Leave({ param($s) if ($s.Tag.Capturing) { $s.Tag.Capturing = $false; Update-KeyLabels } })
+  $b
+}
+$btnOptiKey = New-KeyButton $menu 140 36 'Opti' $true
+$btnDlssKey = New-KeyButton $menu 140 70 'Dlss' $false
 
 $btnSave = New-GoldButton $form 'SAVE SETTINGS' 502 704 236 40 $true
 $btnReload = New-GoldButton $form 'Reload' 748 704 236 40
@@ -471,7 +533,7 @@ function Show-ModsDialog {
     [void]$lv.Items.Add($it); & $renumber
   }
   & $addItem $true 'native' 'CrownsDLSS5\EldenRingDLSS\ReShade64.asi' $true 'ReShade + DLSS (always first)' 'DLSS 5 setup, part 1 (locked): ReShade 6.8 with the EldenRingDLSS add-on. It replaces the game''s anti-aliasing with real NVIDIA DLSS, which DLSS 5 needs. Always loads first.'
-  & $addItem $true 'native' 'Game\OptiScaler.dll' $true 'OptiScaler + DLSS 5 (always second)' 'DLSS 5 setup, part 2 (locked): OptiScaler (DLSS-NR fork). It takes the DLSS image and runs NVIDIA''s DLSS 5 neural rendering on it. Always loads second. Settings: Insert in game.'
+  & $addItem $true 'native' 'Game\OptiScaler.dll' $true 'OptiScaler + DLSS 5 (always second)' 'DLSS 5 setup, part 2 (locked): OptiScaler (DLSS-NR fork). It takes the DLSS image and runs NVIDIA''s DLSS 5 neural rendering on it. Always loads second. Settings: ' + (Format-Key $KeyConf.Opti) + ' in game.'
   foreach ($m in Read-Mods) { & $addItem $m.On $m.Kind $m.Path }
   $lockedCount = 2
 
@@ -569,8 +631,16 @@ function Read-Settings {
   $cmbStyle.SelectedIndex = [Math]::Max(0, [Math]::Min(2, [int](Get-IniValue $p.OptiIni 'DlssNr' 'Style' '0')))
   $trkIntensity.Value = [Math]::Max(0, [Math]::Min(200, [int]([double](Get-IniValue $p.OptiIni 'DlssNr' 'Intensity' '1.0') * 100)))
   $lblIntensity.Text = ($trkIntensity.Value / 100).ToString('0.00')
-  $key = Get-IniValue $p.OptiIni 'Menu' 'ShortcutKey' '0x2D'
-  $idx = [array]::IndexOf(@($keys.Values), $key.ToUpper().Replace('0X', '0x')); $cmbKey.SelectedIndex = [Math]::Max(0, $idx)
+  $KeyConf.Opti = @{
+    Vk = Read-KeyCode (Get-IniValue $p.OptiIni 'Menu' 'ShortcutKey' '0x2D') 0x2D
+    Ctrl = (Get-IniValue $p.OptiIni 'Menu' 'ShortcutKeyRequireCtrl' 'false') -eq 'true'
+    Alt = (Get-IniValue $p.OptiIni 'Menu' 'ShortcutKeyRequireAlt' 'false') -eq 'true'
+  }
+  $KeyConf.Dlss = @{ Vk = Read-KeyCode (Get-IniValue $p.AddonIni 'EldenRingDLSS' 'ToggleKey' '120') 0x78; Ctrl = $false; Alt = $false }
+  $rsIni = Join-Path $p.AddonDir 'ReShade.ini'
+  $KeyConf.ReShade = if ((Test-Path $rsIni) -and ((Get-Content $rsIni -Raw) -match '(?m)^KeyOverlay=(\d+)')) { [int]$Matches[1] } else { 0x24 }
+  $KeyConf.Fps = Read-KeyCode (Get-IniValue $p.OptiIni 'Menu' 'FpsShortcutKey' '0x21') 0x21
+  Update-KeyLabels
   $chkSplash.Checked = (Get-IniValue $p.OptiIni 'Menu' 'DisableSplash' 'false') -eq 'true'
   $chkFps.Checked = (Get-IniValue $p.OptiIni 'Menu' 'ShowFps' 'false') -eq 'true'
 }
@@ -585,13 +655,15 @@ function Write-Settings {
     Enabled = (& $b $chkDlss.Checked); Preset = $presetBack[$cmbPreset.SelectedIndex]; RenderScale = $scaleBack[$cmbScale.SelectedIndex]
     GameSharpening = (& $b $chkSharpen.Checked); ChromaticAberration = (& $b $chkCa.Checked)
     WindMotion = (& $b $chkWind.Checked); WindTrees = (& $b $chkTrees.Checked); RayReconstruction = (& $b $chkRr.Checked)
+    ToggleKey = [string]$KeyConf.Dlss.Vk
   }
   Set-IniValues $p.OptiIni 'DlssNr' @{
     Enabled = (& $t $chkNr.Checked); Passes = [string]($cmbPasses.SelectedIndex + 1); Style = [string]$cmbStyle.SelectedIndex
     Intensity = ($trkIntensity.Value / 100).ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture)
   }
   Set-IniValues $p.OptiIni 'Menu' @{
-    ShortcutKey = @($keys.Values)[$cmbKey.SelectedIndex]; DisableSplash = (& $t $chkSplash.Checked); ShowFps = (& $t $chkFps.Checked)
+    ShortcutKey = '0x{0:X2}' -f $KeyConf.Opti.Vk; ShortcutKeyRequireCtrl = (& $t $KeyConf.Opti.Ctrl); ShortcutKeyRequireAlt = (& $t $KeyConf.Opti.Alt)
+    DisableSplash = (& $t $chkSplash.Checked); ShowFps = (& $t $chkFps.Checked)
   }
   'Settings saved. They apply the next time you start the game.'
 }
@@ -661,7 +733,7 @@ $btnPlay.Add_Click({
     if (-not $pk) {
       Start-Process -FilePath $p.Launcher -WorkingDirectory $p.Root
       if ($moved.Trim()) { return "$($moved.Trim())`r`nStarting $ProductName with DLSS 5..." }
-      return "Starting $ProductName with DLSS 5...`r`nIn game: Insert = DLSS 5 menu, Home = ReShade / DLSS, F9 = DLSS on/off."
+      return "Starting $ProductName with DLSS 5...`r`n$(Get-KeysHint)"
     }
     if (-not ($pk.Dir -and (Test-Path $pk.Profile) -and (Test-Path $pk.Me3))) { throw "$($pk.Name) not found. Pick $($pk.Folder)." }
     # The launcher rewrites the pack profile copy each time (the pack may have been updated), then starts the pack's
@@ -685,7 +757,7 @@ exit /b 1
 "@ | Set-Content -Path $launcher -Encoding ASCII
     if (-not (Get-Content $p.Manifest | Where-Object { $_ -eq $launcher })) { Add-Content $p.Manifest -Value $launcher -Encoding UTF8 }
     Start-Process -FilePath $launcher -WorkingDirectory $pk.Dir
-    $(if ($moved.Trim()) { "$($moved.Trim())`r`n" }) + "Starting $($pk.Name) with DLSS 5 (its own mods and save, through its own me3)...`r`nIn game: Insert = DLSS 5 menu, Home = ReShade / DLSS, F9 = DLSS on/off."
+    $(if ($moved.Trim()) { "$($moved.Trim())`r`n" }) + "Starting $($pk.Name) with DLSS 5 (its own mods and save, through its own me3)...`r`n$(Get-KeysHint)"
   }
 })
 $btnDiag.Add_Click({ Run { Get-Diagnosis $cfg } })
