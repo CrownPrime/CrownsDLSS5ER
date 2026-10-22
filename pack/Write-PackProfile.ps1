@@ -19,19 +19,33 @@ $dlls = @((Join-Path $root 'EldenRingDLSS\ReShade64.asi'), (Join-Path $GameDir '
 
 function Fail($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
 
+# Proxy DLLs Windows loads from the game folder on its own; ReShade and OptiScaler are often installed as these.
+function Get-ConflictingProxies([string]$dir) {
+  @('dxgi.dll', 'd3d12.dll', 'd3d11.dll', 'dinput8.dll', 'winmm.dll', 'version.dll', 'dbghelp.dll', 'wininet.dll', 'winhttp.dll') |
+    Where-Object { Test-Path (Join-Path $dir $_) }
+}
+
 if (-not (Test-Path $BaseProfile)) { Fail "Mod pack profile not found: $BaseProfile" }
 foreach ($d in $dlls) { if (-not (Test-Path $d)) { Fail "DLSS 5 setup not installed ($d missing). Install / Repair first." } }
 foreach ($d in $dlls) { if ($d.Contains("'")) { Fail "Path contains an apostrophe (') and cannot be written to the me3 profile: $d" } }
 $text = [System.IO.File]::ReadAllText($BaseProfile)
+# optional: if a DLSS 5 DLL fails to start, me3 still loads the pack's own mods (a failed required DLL makes me3
+# drop all of them, and the game starts unmodded).
 # Golden Age lists its DLLs as an inline array (natives = [ ... ]): a second natives key is a TOML error, so the
 # DLSS 5 DLLs go at the front of that array. Otherwise they are added as [[natives]] tables at the end.
 $array = [regex]'(?m)^[ \t]*natives[ \t]*=[ \t]*\['
 if ($array.IsMatch($text)) {
-  $entries = ($dlls | ForEach-Object { "{ enabled = true, load_early = true, path = '$_' }," }) -join ' '
+  $entries = ($dlls | ForEach-Object { "{ enabled = true, optional = true, load_early = true, path = '$_' }," }) -join ' '
   $text = $array.Replace($text, [System.Text.RegularExpressions.MatchEvaluator] { param($m) "$($m.Value) $entries " }, 1)
 } else {
   $text = $text.TrimEnd() + "`n`n# CrownsDLSS5ER: ReShade first (EldenRingDLSS add-on), then OptiScaler (DLSS 5).`n"
-  foreach ($d in $dlls) { $text += "[[natives]]`nenabled = true`nload_early = true`npath = '$d'`n`n" }
+  foreach ($d in $dlls) { $text += "[[natives]]`nenabled = true`noptional = true`nload_early = true`npath = '$d'`n`n" }
+}
+
+# Another ReShade / OptiScaler loaded as a proxy DLL from the game folder makes ours fail to start.
+$proxies = @(Get-ConflictingProxies $GameDir)
+if ($proxies.Count) {
+  Write-Host "WARNING: $($proxies -join ', ') in '$GameDir' can stop DLSS 5 from starting (another ReShade / OptiScaler?). Move it out of the game folder." -ForegroundColor Yellow
 }
 [System.IO.File]::WriteAllText($OutProfile, $text)
 

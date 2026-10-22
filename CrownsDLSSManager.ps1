@@ -128,6 +128,10 @@ function Get-StatusLines($cfg) {
   $out += if ($model) { 'DLSS 5 model: found' } else { 'DLSS 5 model: MISSING - add your nvngx_dlssnr.dll (README)' }
   $state = if (Test-Path $p.Manifest) { 'installed' } elseif ((Test-Path $p.Launcher) -and (Test-Path $p.AddonIni)) { 'set up by hand (Install / Repair registers it)' } else { 'not installed' }
   $out += "DLSS 5 setup: $state"
+  # Another ReShade / OptiScaler installed as a proxy DLL in the game folder stops ours from starting.
+  $proxies = @('dxgi.dll', 'd3d12.dll', 'd3d11.dll', 'dinput8.dll', 'winmm.dll', 'version.dll', 'dbghelp.dll', 'wininet.dll', 'winhttp.dll') |
+    Where-Object { Test-Path (Join-Path (Split-Path -Parent $p.Exe) $_) }
+  if ($proxies) { $out += "WARNING:      $($proxies -join ', ') in Game - remove (old ReShade / OptiScaler?)" }
   $pk = Get-Pack $cfg
   if ($pk) {
     $out += if ($pk.Dir -and (Test-Path $pk.Profile) -and (Test-Path $pk.Me3)) { "Mod pack:     $($pk.Name) found" } else { "Mod pack:     $($pk.Name) NOT FOUND - pick $($pk.Folder)" }
