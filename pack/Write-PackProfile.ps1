@@ -35,6 +35,12 @@ if ($array.IsMatch($text)) {
   $text = $text.TrimEnd() + "`n`n# CrownsDLSS5ER: ReShade first (EldenRingDLSS add-on), then OptiScaler (DLSS 5).`n"
   foreach ($d in $dlls) { $text += "[[natives]]`nenabled = true`noptional = true`nload_early = true`npath = '$d'`n`n" }
 }
+# The game's code protection (Arxan) can crash the game at startup when the pack's code patches and the DLSS 5
+# hooks run together (Golden Age: access violation / breakpoint inside eldenring.exe). me3 0.8.1+ can neutralize it.
+# Top-level key, so it goes first; a pack that sets it itself keeps its own value.
+if ($text -notmatch '(?m)^[ \t]*disable_arxan[ \t]*=') {
+  $text = "# CrownsDLSS5ER: neutralize the game's code protection (crashes with the pack's DLLs + DLSS 5).`ndisable_arxan = true`n" + $text
+}
 
 # Another ReShade / OptiScaler loaded as a proxy DLL from the game folder makes ours fail to start.
 & (Join-Path $PSScriptRoot 'Move-GameProxies.ps1') -GameDir $GameDir
