@@ -29,6 +29,8 @@ if ($others.Count) {
     if (Test-Path $extra) { Remove-Item $extra -Recurse -Force; Write-Host "  removed $extra" }
   }
 }
+# Another ReShade / OptiScaler that Install moved out of the game folder goes back.
+& (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'Move-GameProxies.ps1') -GameDir $GameDir -Restore
 Remove-Item $root -Recurse -Force
 Write-Host "  removed $root"
 Write-Host 'Uninstalled.' -ForegroundColor Green

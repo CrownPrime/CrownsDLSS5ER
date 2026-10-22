@@ -128,10 +128,14 @@ function Get-StatusLines($cfg) {
   $out += if ($model) { 'DLSS 5 model: found' } else { 'DLSS 5 model: MISSING - add your nvngx_dlssnr.dll (README)' }
   $state = if (Test-Path $p.Manifest) { 'installed' } elseif ((Test-Path $p.Launcher) -and (Test-Path $p.AddonIni)) { 'set up by hand (Install / Repair registers it)' } else { 'not installed' }
   $out += "DLSS 5 setup: $state"
-  # Another ReShade / OptiScaler installed as a proxy DLL in the game folder stops ours from starting.
-  $proxies = @('dxgi.dll', 'd3d12.dll', 'd3d11.dll', 'dinput8.dll', 'winmm.dll', 'version.dll', 'dbghelp.dll', 'wininet.dll', 'winhttp.dll') |
-    Where-Object { Test-Path (Join-Path (Split-Path -Parent $p.Exe) $_) }
-  if ($proxies) { $out += "WARNING:      $($proxies -join ', ') in Game - remove (old ReShade / OptiScaler?)" }
+  # Proxy DLLs in the game folder: another ReShade / OptiScaler is moved aside on PLAY (pack\Move-GameProxies.ps1);
+  # anything else may still stop ours from starting.
+  foreach ($name in @('dxgi.dll', 'd3d12.dll', 'd3d11.dll', 'dinput8.dll', 'winmm.dll', 'version.dll', 'dbghelp.dll', 'wininet.dll', 'winhttp.dll')) {
+    $f = Join-Path (Split-Path -Parent $p.Exe) $name
+    if (-not (Test-Path $f)) { continue }
+    $product = (Get-Item $f).VersionInfo.ProductName
+    $out += if ($product -match '^(ReShade|OptiScaler)$') { "Old copy:     $name ($product) - moved aside on PLAY" } else { "WARNING:      $name in Game may block DLSS 5" }
+  }
   $pk = Get-Pack $cfg
   if ($pk) {
     $out += if ($pk.Dir -and (Test-Path $pk.Profile) -and (Test-Path $pk.Me3)) { "Mod pack:     $($pk.Name) found" } else { "Mod pack:     $($pk.Name) NOT FOUND - pick $($pk.Folder)" }
@@ -652,15 +656,17 @@ $btnPlay.Add_Click({
   Run {
     $p = Get-Paths $cfg
     if (-not (Test-Path $p.Launcher)) { throw 'Install first.' }
+    $moved = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Pack 'Move-GameProxies.ps1') -GameDir $cfg.GameDir 2>&1 | Out-String
     $pk = Get-Pack $cfg
     if (-not $pk) {
       Start-Process -FilePath $p.Launcher -WorkingDirectory $p.Root
+      if ($moved.Trim()) { return "$($moved.Trim())`r`nStarting $ProductName with DLSS 5..." }
       return "Starting $ProductName with DLSS 5...`r`nIn game: Insert = DLSS 5 menu, Home = ReShade / DLSS, F9 = DLSS on/off."
     }
     if (-not ($pk.Dir -and (Test-Path $pk.Profile) -and (Test-Path $pk.Me3))) { throw "$($pk.Name) not found. Pick $($pk.Folder)." }
     # The launcher rewrites the pack profile copy each time (the pack may have been updated), then starts the pack's
     # own me3 with it. It stays open with the error if either step fails.
-    Copy-Item (Join-Path $Pack 'Write-PackProfile.ps1') $p.Root -Force
+    Copy-Item (Join-Path $Pack 'Write-PackProfile.ps1'), (Join-Path $Pack 'Move-GameProxies.ps1') $p.Root -Force
     $merged = Join-Path (Split-Path -Parent $pk.Profile) ([System.IO.Path]::GetFileNameWithoutExtension($pk.Profile) + ' - CrownsDLSS5.me3')
     $launcher = Join-Path $p.Root "Start_$($pk.Id)_DLSS5.bat"
     @"
@@ -679,7 +685,7 @@ exit /b 1
 "@ | Set-Content -Path $launcher -Encoding ASCII
     if (-not (Get-Content $p.Manifest | Where-Object { $_ -eq $launcher })) { Add-Content $p.Manifest -Value $launcher -Encoding UTF8 }
     Start-Process -FilePath $launcher -WorkingDirectory $pk.Dir
-    "Starting $($pk.Name) with DLSS 5 (its own mods and save, through its own me3)...`r`nIn game: Insert = DLSS 5 menu, Home = ReShade / DLSS, F9 = DLSS on/off."
+    $(if ($moved.Trim()) { "$($moved.Trim())`r`n" }) + "Starting $($pk.Name) with DLSS 5 (its own mods and save, through its own me3)...`r`nIn game: Insert = DLSS 5 menu, Home = ReShade / DLSS, F9 = DLSS on/off."
   }
 })
 $btnDiag.Add_Click({ Run { Get-Diagnosis $cfg } })

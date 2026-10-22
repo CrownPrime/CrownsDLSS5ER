@@ -19,12 +19,6 @@ $dlls = @((Join-Path $root 'EldenRingDLSS\ReShade64.asi'), (Join-Path $GameDir '
 
 function Fail($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
 
-# Proxy DLLs Windows loads from the game folder on its own; ReShade and OptiScaler are often installed as these.
-function Get-ConflictingProxies([string]$dir) {
-  @('dxgi.dll', 'd3d12.dll', 'd3d11.dll', 'dinput8.dll', 'winmm.dll', 'version.dll', 'dbghelp.dll', 'wininet.dll', 'winhttp.dll') |
-    Where-Object { Test-Path (Join-Path $dir $_) }
-}
-
 if (-not (Test-Path $BaseProfile)) { Fail "Mod pack profile not found: $BaseProfile" }
 foreach ($d in $dlls) { if (-not (Test-Path $d)) { Fail "DLSS 5 setup not installed ($d missing). Install / Repair first." } }
 foreach ($d in $dlls) { if ($d.Contains("'")) { Fail "Path contains an apostrophe (') and cannot be written to the me3 profile: $d" } }
@@ -43,10 +37,7 @@ if ($array.IsMatch($text)) {
 }
 
 # Another ReShade / OptiScaler loaded as a proxy DLL from the game folder makes ours fail to start.
-$proxies = @(Get-ConflictingProxies $GameDir)
-if ($proxies.Count) {
-  Write-Host "WARNING: $($proxies -join ', ') in '$GameDir' can stop DLSS 5 from starting (another ReShade / OptiScaler?). Move it out of the game folder." -ForegroundColor Yellow
-}
+& (Join-Path $PSScriptRoot 'Move-GameProxies.ps1') -GameDir $GameDir
 [System.IO.File]::WriteAllText($OutProfile, $text)
 
 if ((Test-Path $manifest) -and -not (Get-Content $manifest | Where-Object { $_ -eq $OutProfile })) { Add-Content $manifest -Value $OutProfile -Encoding UTF8 }

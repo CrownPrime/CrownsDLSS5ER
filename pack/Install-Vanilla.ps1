@@ -26,9 +26,8 @@ if (-not (Test-Path (Join-Path $GameDir 'eldenring.exe'))) { Fail "eldenring.exe
 $GameDir = (Resolve-Path $GameDir).Path
 $gameExe = Join-Path $GameDir 'eldenring.exe'
 if (Get-Process eldenring -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $gameExe }) { Fail 'Close ELDEN RING first.' }
-if (Test-Path (Join-Path $GameDir 'dxgi.dll')) {
-  Write-Host "WARNING: '$GameDir\dxgi.dll' exists. Another proxy DLL there can conflict with this setup." -ForegroundColor Yellow
-}
+# Another ReShade / OptiScaler loaded as a proxy DLL from the game folder stops ours from starting.
+& (Join-Path $pack 'Move-GameProxies.ps1') -GameDir $GameDir
 
 $root = Join-Path (Split-Path -Parent $GameDir) 'CrownsDLSS5'
 $addonDir = Join-Path $root 'EldenRingDLSS'
