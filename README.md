@@ -61,7 +61,7 @@ If a hash doesn't match, don't use it. Without the model you still get DLSS, jus
 **YOUR MODS** loads folder and DLL mods, top to bottom, after the DLSS 5 setup. There's an optional
 separate save. Don't add another ReShade or upscaler.
 
-Included support for large overhaul mods: Convergence and Golden Age.
+Included support for large overhaul mods: Convergence, Golden Age and Reforged (experimental, offline only).
 
 ![Play with: Elden Ring, The Convergence or Golden Age](docs/images/play-with.png)
 

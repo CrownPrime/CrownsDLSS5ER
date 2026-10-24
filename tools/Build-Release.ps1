@@ -49,6 +49,18 @@ $info = Join-Path $dist 'LauncherInfo.cs'
   (Join-Path $repo 'tools\Launcher.cs') $info
 if ($LASTEXITCODE) { throw 'Compiling CrownsDLSS5ER.exe failed.' }
 Remove-Item $info
+
+# pack\CrownsDLSS5ER_Loader.dll (tools\Loader.cpp), for mod packs whose own launcher builds the me3 profile
+# (Reforged), compiled with the Visual Studio C++ tools.
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+$vs = if (Test-Path $vswhere) { & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath }
+if (-not $vs) { throw 'Visual Studio C++ tools not found (needed for CrownsDLSS5ER_Loader.dll).' }
+$obj = Join-Path $dist 'loader-obj'
+New-Item -ItemType Directory -Force $obj | Out-Null
+cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul 2>&1 && cl /nologo /LD /O2 /MT /W4 `"$(Join-Path $repo 'tools\Loader.cpp')`" /Fe:`"$(Join-Path $stage 'pack\CrownsDLSS5ER_Loader.dll')`" /Fo:`"$obj\\`" /link /NOLOGO user32.lib kernel32.lib" | Out-Null
+if ($LASTEXITCODE -or -not (Test-Path (Join-Path $stage 'pack\CrownsDLSS5ER_Loader.dll'))) { throw 'Compiling CrownsDLSS5ER_Loader.dll failed.' }
+Remove-Item $obj -Recurse -Force
+Get-ChildItem (Join-Path $stage 'pack') -Filter 'CrownsDLSS5ER_Loader.*' | Where-Object { $_.Extension -ne '.dll' } | Remove-Item
 # Binaries from the local pack (settings files are reset to the release defaults below).
 Copy-Item (Join-Path $Source 'files') (Join-Path $stage 'pack\files') -Recurse -Force
 Copy-Item (Join-Path $Source 'me3') (Join-Path $stage 'pack\me3') -Recurse -Force

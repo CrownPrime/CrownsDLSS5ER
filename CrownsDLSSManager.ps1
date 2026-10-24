@@ -28,9 +28,13 @@ $ProductName = 'Elden Ring'
 
 # Overhaul mod packs that ship their own me3 and profile. PLAY runs one through its own me3, with a copy of its
 # profile that adds the DLSS 5 setup (pack\Write-PackProfile.ps1). Paths are relative to the pack's folder.
+# A pack with Launcher instead writes its me3 profile itself on every launch from the DLLs in its Drop folder: PLAY puts
+# pack\CrownsDLSS5ER_Loader.dll there (it loads ReShade and OptiScaler from the install) and starts that launcher.
 $Packs = [ordered]@{
   'The Convergence' = @{ Id = 'Convergence'; Key = 'ConvergenceDir'; Profile = 'me3\convergence.me3'; Me3 = 'me3\Windows\me3.exe'; Args = ' --skip-steam-init true'; Folder = 'the ConvergenceER folder' }
   'Golden Age' = @{ Id = 'GoldenAge'; Key = 'GoldenAgeDir'; Profile = 'Start_GoldenAge.me3'; Me3 = 'me3\bin\me3.exe'; Args = ''; Folder = 'the Golden Age folder (with Start_GoldenAge.bat)' }
+  # Offline / Seamless mode only: Reforged's online mode loads only the DLLs on its server-side whitelist.
+  'Reforged (ERR)' = @{ Id = 'Reforged'; Key = 'ReforgedDir'; Launcher = 'internals\launcher\ReforgedLauncher.exe'; Args = '--offline'; Drop = 'dll\offline'; Folder = 'the ELDEN RING Reforged folder (with the "Launch ELDEN RING Reforged" files)'; Experimental = $true }
 }
 
 # --- INI helpers (section-aware, keep the rest of the file and its line endings) ----------------------------
@@ -91,11 +95,15 @@ function Save-Config($cfg) { $cfg.Keys | Sort-Object | ForEach-Object { "$_=$($c
 function Get-Pack($cfg) {
   if (-not $Packs.Contains([string]$cfg.Play)) { return $null }
   $d = $Packs[[string]$cfg.Play]; $dir = [string]$cfg[$d.Key]
-  [pscustomobject]@{
+  $at = { param($rel) if ($dir -and $rel) { Join-Path $dir $rel } else { '' } }
+  $pk = [pscustomobject]@{
     Name = [string]$cfg.Play; Id = $d.Id; Key = $d.Key; Folder = $d.Folder; Args = $d.Args; Dir = $dir
-    Profile = if ($dir) { Join-Path $dir $d.Profile } else { '' }
-    Me3 = if ($dir) { Join-Path $dir $d.Me3 } else { '' }
+    Profile = & $at $d.Profile; Me3 = & $at $d.Me3; Launcher = & $at $d.Launcher; Drop = & $at $d.Drop
+    Experimental = [bool]$d.Experimental; Found = $false
+    ShortName = [string]$cfg.Play -replace ' \(.*$', ''; FolderShort = $d.Folder -replace ' \(.*$', ''
   }
+  $pk.Found = [bool]$dir -and $(if ($pk.Launcher) { Test-Path $pk.Launcher } else { (Test-Path $pk.Profile) -and (Test-Path $pk.Me3) })
+  $pk
 }
 
 function Get-Paths($cfg) {
@@ -138,7 +146,7 @@ function Get-StatusLines($cfg) {
   }
   $pk = Get-Pack $cfg
   if ($pk) {
-    $out += if ($pk.Dir -and (Test-Path $pk.Profile) -and (Test-Path $pk.Me3)) { "Mod pack:     $($pk.Name) found" } else { "Mod pack:     $($pk.Name) NOT FOUND - pick $($pk.Folder)" }
+    $out += if ($pk.Found) { "Mod pack:     $($pk.Name) found$(if ($pk.Experimental) { ' (experimental)' })" } else { "Mod pack:     $($pk.Name) NOT FOUND - pick $($pk.FolderShort)" }
   }
   if (Test-GameRunning $p) { $out += 'Game is RUNNING - close it to install or change settings.' }
   $out
@@ -431,7 +439,7 @@ function Get-ModWarning([string]$kind, [string]$path) {
       return "$name looks like a ReShade / upscaler mod. This setup already provides ReShade, DLSS and DLSS 5; a second one will clash."
     }
   } else {
-    if (Get-ChildItem $path -Filter '*.me3' -File -ErrorAction SilentlyContinue) { return 'This folder contains an .me3 profile - it looks like a whole mod pack. The Convergence / Golden Age: pick them under Play with instead (their mod folder alone leaves out their DLL mods, which breaks dodge, items and weapon switching). Other packs: pick the mod folder inside it.' }
+    if (Get-ChildItem $path -Filter '*.me3' -File -ErrorAction SilentlyContinue) { return 'This folder contains an .me3 profile - it looks like a whole mod pack. The Convergence / Golden Age / Reforged: pick them under Play with instead (their mod folder alone leaves out their DLL mods, which breaks dodge, items and weapon switching). Other packs: pick the mod folder inside it.' }
     if (Test-Path (Join-Path $path 'config_eldenring.toml')) { return 'This is a Mod Engine 2 install. Pick its mod folder (usually "mod") instead.' }
     if (Test-Path (Join-Path $path 'eldenring.exe')) { return 'This is the game folder itself, not a mod folder.' }
   }
@@ -672,7 +680,7 @@ function Update-PlayUi {
   $pk = Get-Pack $cfg
   $txtPack.Enabled = [bool]$pk; $btnPack.Enabled = [bool]$pk; $btnMods.Enabled = -not $pk
   $txtPack.Text = if ($pk) { $pk.Dir } else { '' }
-  $lblPlay.Text = if ($pk) { "its own mods and save" } else { 'normal game + YOUR MODS' }
+  $lblPlay.Text = if ($pk.Launcher) { 'offline / Seamless only' } elseif ($pk) { 'its own mods and save' } else { 'normal game + YOUR MODS' }
   $btnPlay.Text = if ($pk) { "PLAY $($pk.Name.ToUpper())" } else { 'PLAY ELDEN RING' }
 }
 
@@ -735,7 +743,34 @@ $btnPlay.Add_Click({
       if ($moved.Trim()) { return "$($moved.Trim())`r`nStarting $ProductName with DLSS 5..." }
       return "Starting $ProductName with DLSS 5...`r`n$(Get-KeysHint)"
     }
-    if (-not ($pk.Dir -and (Test-Path $pk.Profile) -and (Test-Path $pk.Me3))) { throw "$($pk.Name) not found. Pick $($pk.Folder)." }
+    if (-not $pk.Found) { throw "$($pk.Name) not found. Pick $($pk.Folder)." }
+    if ($pk.Experimental) {
+      $r = [System.Windows.Forms.MessageBox]::Show(
+        "$($pk.Name) support is experimental and may not work yet.`r`n`r`n" +
+        "It runs in $($pk.ShortName)'s offline / Seamless mode only. Its online mode allows only its own approved DLLs, so DLSS 5 cannot run there.`r`n`r`n" +
+        "If it doesn't work, contact CrownPrime on Discord: crownprime`r`n`r`nContinue?",
+        'CrownsDLSS5ER - experimental', 'OKCancel', 'Warning')
+      if ($r -ne 'OK') { return 'Cancelled.' }
+    }
+    if ($pk.Launcher) {
+      # The pack's launcher builds its me3 profile from every DLL in its Drop folder: the loader goes there, with the
+      # list of DLLs to load from this install (ReShade first, then OptiScaler). Uninstall removes all three files.
+      $loader = Join-Path $Pack 'CrownsDLSS5ER_Loader.dll'
+      if (-not (Test-Path $loader)) { throw 'pack\CrownsDLSS5ER_Loader.dll is missing. Extract the whole release zip again.' }
+      $dlls = @((Join-Path $p.AddonDir 'ReShade64.asi'), (Join-Path (Split-Path -Parent $p.Exe) 'OptiScaler.dll'))
+      foreach ($d in $dlls) { if (-not (Test-Path $d)) { throw "DLSS 5 setup not installed ($d missing). Install / Repair first." } }
+      New-Item -ItemType Directory -Force $pk.Drop | Out-Null
+      Copy-Item $loader $pk.Drop -Force
+      $list = Join-Path $pk.Drop 'CrownsDLSS5ER_Loader.txt'
+      [System.IO.File]::WriteAllLines($list, [string[]]@('# CrownsDLSS5ER: loaded in this order by CrownsDLSS5ER_Loader.dll') + $dlls)
+      foreach ($f in @('CrownsDLSS5ER_Loader.dll', 'CrownsDLSS5ER_Loader.txt', 'CrownsDLSS5ER_Loader.log')) {
+        $f = Join-Path $pk.Drop $f
+        if (-not (Get-Content $p.Manifest | Where-Object { $_ -eq $f })) { Add-Content $p.Manifest -Value $f -Encoding UTF8 }
+      }
+      Start-Process -FilePath $pk.Launcher -ArgumentList $pk.Args -WorkingDirectory $pk.Dir
+      return $(if ($moved.Trim()) { "$($moved.Trim())`r`n" }) + "Starting $($pk.Name) in offline mode with DLSS 5 (experimental). Its launcher may show its own steps first.`r`n" +
+        "If DLSS 5 does not start: $(Join-Path $pk.Drop 'CrownsDLSS5ER_Loader.log') says what was loaded.`r`n$(Get-KeysHint)"
+    }
     # The launcher rewrites the pack profile copy each time (the pack may have been updated), then starts the pack's
     # own me3 with it. It stays open with the error if either step fails.
     Copy-Item (Join-Path $Pack 'Write-PackProfile.ps1'), (Join-Path $Pack 'Move-GameProxies.ps1') $p.Root -Force
