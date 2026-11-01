@@ -736,7 +736,9 @@ $btnPlay.Add_Click({
   Run {
     $p = Get-Paths $cfg
     if (-not (Test-Path $p.Launcher)) { throw 'Install first.' }
-    $moved = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Pack 'Move-GameProxies.ps1') -GameDir $cfg.GameDir 2>&1 | Out-String
+    # PLAY starts the game with what the window shows, so changes no longer need SAVE SETTINGS first.
+    Write-Settings | Out-Null
+    $moved =& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Pack 'Move-GameProxies.ps1') -GameDir $cfg.GameDir 2>&1 | Out-String
     $pk = Get-Pack $cfg
     if (-not $pk) {
       Start-Process -FilePath $p.Launcher -WorkingDirectory $p.Root
