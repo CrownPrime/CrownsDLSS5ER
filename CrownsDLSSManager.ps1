@@ -132,8 +132,12 @@ function Get-StatusLines($cfg) {
   $out = @()
   $out += if (Test-Path $p.Exe) { "Game:         found  (eldenring.exe $((Get-Item $p.Exe).VersionInfo.FileVersion))" } else { 'Game:         NOT FOUND - pick the folder with eldenring.exe' }
   $out += "Installs to:  ...\$(Split-Path -Leaf (Split-Path -Parent $p.Root))\CrownsDLSS5"
-  $model = (Test-Path (Join-Path $Pack 'files\Game\nvngx_dlssnr.dll')) -or (Test-Path (Join-Path (Split-Path -Parent $p.Exe) 'nvngx_dlssnr.dll'))
-  $out += if ($model) { 'DLSS 5 model: found' } else { 'DLSS 5 model: MISSING - add your nvngx_dlssnr.dll (README)' }
+  $model = @((Join-Path (Split-Path -Parent $p.Exe) 'nvngx_dlssnr.dll'), (Join-Path $Pack 'files\Game\nvngx_dlssnr.dll')) | Where-Object { Test-Path $_ } | Select-Object -First 1
+  $out += if (-not $model) { 'DLSS 5 model: MISSING - add your nvngx_dlssnr.dll (README)' } else {
+    $v = (Get-Item $model).VersionInfo
+    $ver = "$($v.FileMajorPart).$($v.FileMinorPart).$($v.FileBuildPart)"
+    "DLSS 5 model: $ver " + $(if ([version]"$ver" -ge [version]'310.9') { '(Original + Optimized)' } else { '(Original only)' })
+  }
   $state = if (Test-Path $p.Manifest) { 'installed' } elseif ((Test-Path $p.Launcher) -and (Test-Path $p.AddonIni)) { 'set up by hand (Install / Repair registers it)' } else { 'not installed' }
   $out += "DLSS 5 setup: $state"
   # Proxy DLLs in the game folder: another ReShade / OptiScaler is moved aside on PLAY (pack\Move-GameProxies.ps1);
@@ -289,6 +293,7 @@ $lblInfo.AutoSize = $false; $lblInfo.SetBounds(14, 90, 442, 36)
 $lblStatus = New-Label $setup '' 14 130; $lblStatus.Font = New-Object System.Drawing.Font('Consolas', 9); $lblStatus.AutoSize = $false; $lblStatus.SetBounds(14, 130, 442, 88)
 $btnInstall = New-GoldButton $setup 'Install / Repair' 14 222 214 34
 $btnUninstall = New-GoldButton $setup 'Uninstall' 242 222 214 34
+$btnGuide = New-GoldButton $header 'SETUP GUIDE' 830 38 150 36
 
 $play = New-Card 'Play' 16 408 470 152
 New-Label $play 'Play with' 14 40 $Theme.Muted | Out-Null
@@ -323,6 +328,20 @@ $chkRr = New-Check $dlss 'Ray Reconstruction (experimental)' 14 196
 
 $nr = New-Card 'DLSS 5  (neural rendering)' 502 376 482 196
 $chkNr = New-Check $nr 'Neural rendering on' 14 38
+# [DlssNr] Preset: which model inside nvngx_dlssnr.dll. 310.9 has both (Optimized is its default); 310.8 only Original.
+New-Label $nr 'Model' 180 42 $Theme.Muted | Out-Null
+$cmbModel = New-Combo $nr @('Automatic', 'Original (My Preference)', 'Optimized DLSS 5 (Recent release)') 222 38 244
+# Picked by the user (not loaded from the INI): anything but Original gets the author's recommendation.
+$cmbModel.Add_SelectionChangeCommitted({
+  if ($cmbModel.SelectedIndex -ne 1) {
+    [void][System.Windows.Forms.MessageBox]::Show(
+      "If your PC can handle it, I personally recommend Original DLSS 5 for the best visuals.`r`n`r`n" +
+      "Optimized DLSS 5 looks a little less impressive.`r`n`r`n" +
+      "Make sure to put in the correct DLSS 5 file for your GPU (RTX 50, or RTX 20 / 30 / 40).`r`n" +
+      "Only one DLSS 5 file (nvngx_dlssnr.dll) should be in the game folder at a time.`r`n`r`n- CrownPrime",
+      'CrownsDLSS5ER - DLSS 5 model', 'OK', 'Information')
+  }
+})
 New-Label $nr 'Model passes' 14 72 $Theme.Muted | Out-Null
 $cmbPasses = New-Combo $nr @('1', '2', '3') 120 68 70
 New-Label $nr 'Style' 210 72 $Theme.Muted | Out-Null
@@ -619,6 +638,44 @@ function Show-ModsDialog {
   [void]$dlg.ShowDialog($form)
 }
 
+# Step-by-step setup, from getting the DLSS 5 file to PLAY.
+function Show-Guide {
+  $dlg = New-Object System.Windows.Forms.Form
+  $dlg.Text = 'Setup guide - CrownsDLSS5ER'; $dlg.ClientSize = New-Object System.Drawing.Size(720, 680)
+  $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
+  $dlg.BackColor = $Theme.Bg; $dlg.ForeColor = $Theme.Text; $dlg.Font = $FontUi; $dlg.Icon = $form.Icon
+
+  $head = New-Object System.Windows.Forms.Label
+  $head.Text = 'SETUP GUIDE'; $head.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 16); $head.ForeColor = $Theme.Gold
+  $head.AutoSize = $true; $head.Location = New-Object System.Drawing.Point(14, 10)
+
+  $steps = @(
+    @('1.  Get the DLSS 5 file', "NVIDIA's DLSS 5 file is nvngx_dlssnr.dll. It is not included - you get it yourself.`r`nGet the newest version (310.9): it has both Original and Optimized DLSS 5. The older 310.8 also works, but only has Original.`r`nThere are two versions. Pick ONE, for your graphics card:`r`n   RTX 50 series: NVIDIA's original file`r`n   RTX 20 / 30 / 40 series: the compatibility file"),
+    @('2.  Put it in the DLSS 5 file folder', "Click 'Open DLSS 5 file folder' below and put nvngx_dlssnr.dll there.`r`nOnly one nvngx_dlssnr.dll - if an older one is there, replace it."),
+    @('3.  Pick your game folder', 'In SETUP, click Browse and pick the Elden Ring folder that contains eldenring.exe.'),
+    @('4.  Install', "Click Install / Repair. The status should then say:  DLSS 5 model: 310.9.16 (Original + Optimized)"),
+    @('5.  Choose what to play', "In PLAY, pick Elden Ring, The Convergence, Golden Age or Reforged (experimental). For a mod pack, Browse to its folder."),
+    @('6.  Choose the DLSS 5 model', "Original (My Preference): best visuals.`r`nOptimized DLSS 5 (Recent release): faster, looks a little less impressive (needs 310.9)."),
+    @('7.  Play', "Click PLAY. $(Get-KeysHint)")
+  )
+  $y = 52
+  foreach ($s in $steps) {
+    $t = New-Label $dlg $s[0] 16 $y $Theme.Gold; $t.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 11)
+    $b = New-Object System.Windows.Forms.Label
+    $b.Text = $s[1]; $b.ForeColor = $Theme.Text; $b.Location = New-Object System.Drawing.Point(34, ($y + 24))
+    $b.MaximumSize = New-Object System.Drawing.Size(670, 0); $b.AutoSize = $true; $dlg.Controls.Add($b)
+    $y += 24 + $b.PreferredHeight + 14
+  }
+  New-Label $dlg 'Changing the DLSS 5 file later: replace it in the same folder, then click Install / Repair again.' 16 ($y + 2) $Theme.Muted | Out-Null
+
+  $bOpen = New-GoldButton $dlg 'Open DLSS 5 file folder' 16 632 220 34
+  $bOpen.Add_Click({ Start-Process explorer.exe (Join-Path $Pack 'files\Game') })
+  $bClose = New-GoldButton $dlg 'Close' 584 632 120 34
+  $bClose.Add_Click({ $dlg.Close() })
+  $dlg.Controls.Add($head)
+  [void]$dlg.ShowDialog($form)
+}
+
 # --- Bind settings ---------------------------------------------------------------------------------------------
 $presetMap = @{ '0' = 0; '11' = 1; '12' = 2; '13' = 3 }; $presetBack = @('0', '11', '12', '13')
 $scaleBack = @('1.00', '0.67', '0.58', '0.50')
@@ -643,6 +700,7 @@ function Read-Settings {
   $chkNr.Checked = (Get-IniValue $p.OptiIni 'DlssNr' 'Enabled' 'false') -eq 'true'
   $passes = Get-IniValue $p.OptiIni 'DlssNr' 'Passes' '1'; $cmbPasses.SelectedIndex = [Math]::Max(0, [Math]::Min(2, [int]$passes - 1))
   $cmbStyle.SelectedIndex = [Math]::Max(0, [Math]::Min(2, [int](Get-IniValue $p.OptiIni 'DlssNr' 'Style' '0')))
+  $cmbModel.SelectedIndex = [Math]::Max(0, [Math]::Min(2, [int](Get-IniValue $p.OptiIni 'DlssNr' 'Preset' '0')))
   $trkIntensity.Value = [Math]::Max(0, [Math]::Min(200, [int]([double](Get-IniValue $p.OptiIni 'DlssNr' 'Intensity' '1.0') * 100)))
   $lblIntensity.Text = ($trkIntensity.Value / 100).ToString('0.00')
   $KeyConf.Opti = @{
@@ -674,6 +732,7 @@ function Write-Settings {
   }
   Set-IniValues $p.OptiIni 'DlssNr' @{
     Enabled = (& $t $chkNr.Checked); Passes = [string]($cmbPasses.SelectedIndex + 1); Style = [string]$cmbStyle.SelectedIndex
+    Preset = [string]$cmbModel.SelectedIndex
     Intensity = ($trkIntensity.Value / 100).ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture)
   }
   Set-IniValues $p.OptiIni 'Menu' @{
@@ -807,6 +866,7 @@ exit /b 1
 })
 $btnDiag.Add_Click({ Run { Get-Diagnosis $cfg } })
 $btnMods.Add_Click({ Show-ModsDialog })
+$btnGuide.Add_Click({ Show-Guide })
 $btnMods.Text = "YOUR MODS ($(@(Read-Mods | Where-Object { $_.On }).Count))"
 $btnRsLog.Add_Click({ $p = Get-Paths $cfg; if (Test-Path $p.ReShadeLog) { Start-Process notepad.exe $p.ReShadeLog } else { $txtDiag.Text = 'No ReShade.log yet.' } })
 $btnOptiLog.Add_Click({ $p = Get-Paths $cfg; if (Test-Path $p.OptiLog) { Start-Process notepad.exe $p.OptiLog } else { $txtDiag.Text = 'No OptiScaler.log yet.' } })

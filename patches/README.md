@@ -1,12 +1,12 @@
 # Source changes
 
-## OptiScaler (GPL-3.0): `crownsdlss5er-optiscaler-f45ccf3a.patch`
+## OptiScaler (GPL-3.0): `crownsdlss5er-optiscaler-v0.8.10.patch`
 
 The release ships a modified build of the OptiScaler DLSS-NR fork. Under GPL-3.0, its complete source is
 available here.
 
 - **Base:** [wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass](https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass),
-  commit `f45ccf3a761df91450959d325ac0166cba5364c9` (the v0.8.91 build).
+  tag `v0.8.10` (commit `6125a75b37f7e2a408e31934f4827e5660429203`).
 - **Changes:** three files, `OptiScaler/menu/menu_common.cpp`, `OptiScaler/dlssnr/DlssNr_PipelineUi.h` and
   `OptiScaler/dlssnr/DlssNr_Menu.cpp`. They add:
   - a CrownsDLSS5ER header with the emblem drawn as ImGui shapes;
@@ -19,16 +19,16 @@ available here.
 ```
 git clone https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass.git
 cd OptiScaler-DLSSNR-PreSR-Multipass
-git checkout f45ccf3a761df91450959d325ac0166cba5364c9
+git checkout v0.8.10
 git submodule update --init --depth 1
-git apply path\to\crownsdlss5er-optiscaler-f45ccf3a.patch
+git apply path\to\crownsdlss5er-optiscaler-v0.8.10.patch
 msbuild OptiScaler.sln /t:OptiScaler /p:Configuration=Release /p:Platform=x64
 ```
 
 That needs Visual Studio 2022 with the C++ tools (toolset v143).
 
 The same change is committed, ready to clone and build, on the public fork:
-**[CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass @ `crownsdlss5er`](https://github.com/CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass/tree/crownsdlss5er)** (commit `63014c2`).
+**[CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass @ `crownsdlss5er`](https://github.com/CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass/tree/crownsdlss5er)** (commit `d12b49c5`).
 
 ## EldenRingDLSS (MIT): `EldenRingDLSS-0.1.0-crownsdlss5er.patch`
 

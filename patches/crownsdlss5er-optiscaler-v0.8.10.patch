@@ -1,23 +1,5 @@
-From 63014c2f55328b72a9400ac4b01bb84f4aa61b07 Mon Sep 17 00:00:00 2001
-From: CrownPrime <228779844+CrownPrime@users.noreply.github.com>
-Date: Fri, 16 Oct 2026 20:15:44 +0530
-Subject: [PATCH] CrownsDLSS5ER branding for the in-game menu
-
-Adds a CrownsDLSS5ER header with the CrownPrime emblem drawn as ImGui shapes,
-prefixes the main window title, and switches the dark theme to warm black,
-cream text and dark-gold borders. The DLSS-NR model node, timing bar and
-running indicator use gold instead of green. Settings and behaviour are
-unchanged. Based on f45ccf3a (the v0.8.91 build).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
----
- OptiScaler/dlssnr/DlssNr_Menu.cpp     |  4 +-
- OptiScaler/dlssnr/DlssNr_PipelineUi.h |  4 +-
- OptiScaler/menu/menu_common.cpp       | 95 ++++++++++++++++++++++++---
- 3 files changed, 89 insertions(+), 14 deletions(-)
-
 diff --git a/OptiScaler/dlssnr/DlssNr_Menu.cpp b/OptiScaler/dlssnr/DlssNr_Menu.cpp
-index 1e51aeb0..ca28cf0f 100644
+index 769a5dd9..cec8e10e 100644
 --- a/OptiScaler/dlssnr/DlssNr_Menu.cpp
 +++ b/OptiScaler/dlssnr/DlssNr_Menu.cpp
 @@ -96,10 +96,10 @@ static void RenderStatus(Config* config)
@@ -56,7 +38,7 @@ index 45e063ed..e00f63df 100644
          draw->AddRectFilled(at, ImVec2(at.x + nodeWidth, at.y + height), ImGui::GetColorU32(fill),
                              ImGui::GetStyle().FrameRounding);
 diff --git a/OptiScaler/menu/menu_common.cpp b/OptiScaler/menu/menu_common.cpp
-index 5f958ae1..488100c9 100644
+index e623ca05..2b4f6a5a 100644
 --- a/OptiScaler/menu/menu_common.cpp
 +++ b/OptiScaler/menu/menu_common.cpp
 @@ -75,6 +75,79 @@ static bool hasGamepad = false;
@@ -160,7 +142,7 @@ index 5f958ae1..488100c9 100644
      const ImVec4 dimBg = lightTheme ? ImVec4(0.30f, 0.33f, 0.38f, 0.20f) : ImVec4(0.09f, 0.10f, 0.13f, 0.20f);
      const ImVec4 modalDimBg = lightTheme ? ImVec4(0.22f, 0.24f, 0.28f, 0.55f) : ImVec4(0.04f, 0.04f, 0.07f, 0.55f);
  
-@@ -6446,9 +6519,9 @@ void MenuCommon::RenderThemeSettings(RenderMenuContext& ctx)
+@@ -6449,9 +6522,9 @@ void MenuCommon::RenderThemeSettings(RenderMenuContext& ctx)
  
          bool lightTheme = config->LightTheme.value_or_default();
  
@@ -173,7 +155,7 @@ index 5f958ae1..488100c9 100644
  
          auto Mix = [](const ImVec4& a, const ImVec4& b, float t, float alpha = 1.0f)
          { return ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, alpha); };
-@@ -7919,13 +7992,15 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
+@@ -7922,13 +7995,15 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
      // Main menu window
      if (windowTitle.empty())
      {
@@ -190,6 +172,3 @@ index 5f958ae1..488100c9 100644
          // Header/status messages shown above the two-column settings table.
          RenderMainMenuHeaderMessages(ctx);
  
--- 
-2.52.0.windows.1
-

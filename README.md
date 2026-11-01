@@ -34,13 +34,16 @@ The EldenRingDLSS add-on and the OptiScaler DLSS-NR fork didn't run together out
 
 ## The model
 
-`nvngx_dlssnr.dll` (310.8) is NVIDIA's. Not included, not linked. Get your own and put it in `pack\files\Game\`.
+`nvngx_dlssnr.dll` (310.8 or 310.9) is NVIDIA's. Not included, not linked. Get your own and put it in `pack\files\Game\`.
+310.9 adds the faster **Optimized** model (launcher: DLSS 5 > Model).
 
 Tested hashes (`Get-FileHash .\nvngx_dlssnr.dll`):
 
 ```
-RTX 50        E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E
-RTX 20/30/40  E67DEE209320CDAFE0E93E45675D7AA34323A53ACC57A72B2E40A181581C989A
+310.9  RTX 50        2BC19BC09A7B89DD44F73E2AC0108FCC586E2154BDD0830F242F4F040E28789F
+310.9  RTX 20/30/40  CDFA6C1EC784867182164C7836F324F087B5C9F374D0C9FE46F54999FEABF3ED
+310.8  RTX 50        E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E
+310.8  RTX 20/30/40  E67DEE209320CDAFE0E93E45675D7AA34323A53ACC57A72B2E40A181581C989A
 ```
 
 Background: the [DLSS-NR fork's install guide](https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/blob/main/INSTALL-DLSSNR.md).
