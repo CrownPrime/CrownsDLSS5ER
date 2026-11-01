@@ -622,6 +622,12 @@ function Show-ModsDialog {
 # --- Bind settings ---------------------------------------------------------------------------------------------
 $presetMap = @{ '0' = 0; '11' = 1; '12' = 2; '13' = 3 }; $presetBack = @('0', '11', '12', '13')
 $scaleBack = @('1.00', '0.67', '0.58', '0.50')
+# When the settings files were last read or written here. The game (F9, the ReShade overlay, the OptiScaler menu)
+# rewrites them; the window reloads them after it closes, so PLAY never saves older values over those changes.
+$SettingsSeen = @{ Stamp = '' }
+function Get-SettingsStamp($p) {
+  (@($p.AddonIni, $p.OptiIni) | ForEach-Object { if (Test-Path $_) { (Get-Item $_).LastWriteTimeUtc.Ticks } }) -join ','
+}
 
 function Read-Settings {
   $p = Get-Paths $cfg
@@ -651,6 +657,7 @@ function Read-Settings {
   Update-KeyLabels
   $chkSplash.Checked = (Get-IniValue $p.OptiIni 'Menu' 'DisableSplash' 'false') -eq 'true'
   $chkFps.Checked = (Get-IniValue $p.OptiIni 'Menu' 'ShowFps' 'false') -eq 'true'
+  $SettingsSeen.Stamp = Get-SettingsStamp $p
 }
 
 function Write-Settings {
@@ -673,6 +680,7 @@ function Write-Settings {
     ShortcutKey = '0x{0:X2}' -f $KeyConf.Opti.Vk; ShortcutKeyRequireCtrl = (& $t $KeyConf.Opti.Ctrl); ShortcutKeyRequireAlt = (& $t $KeyConf.Opti.Alt)
     DisableSplash = (& $t $chkSplash.Checked); ShowFps = (& $t $chkFps.Checked)
   }
+  $SettingsSeen.Stamp = Get-SettingsStamp $p
   'Settings saved. They apply the next time you start the game.'
 }
 
@@ -804,6 +812,12 @@ $btnRsLog.Add_Click({ $p = Get-Paths $cfg; if (Test-Path $p.ReShadeLog) { Start-
 $btnOptiLog.Add_Click({ $p = Get-Paths $cfg; if (Test-Path $p.OptiLog) { Start-Process notepad.exe $p.OptiLog } else { $txtDiag.Text = 'No OptiScaler.log yet.' } })
 $btnSave.Add_Click({ Run { Write-Settings } })
 $btnReload.Add_Click({ Refresh-All; $txtDiag.Text = 'Settings reloaded from the game files.' })
+# Coming back to the window (as before any click on PLAY) picks up what the game changed once it has closed.
+$form.Add_Activated({
+  $p = Get-Paths $cfg
+  if ((Get-SettingsStamp $p) -eq $SettingsSeen.Stamp -or (Test-GameRunning $p)) { return }
+  try { Read-Settings; $txtDiag.Text = 'Settings changed in game - reloaded.' } catch { $SettingsSeen.Stamp = Get-SettingsStamp $p }
+})
 
 Update-PlayUi
 Refresh-All
