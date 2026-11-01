@@ -40,3 +40,5 @@ The same change is committed, ready to clone and build, on the public fork:
   - **ReShade proxy objects for NGX:** NGX gets ReShade's proxy command list, and is re-initialised on that list's
     device. This fixes a crash in `D3D12Core!SetDescriptorHeapsInternal` when the DLSS-NR model records into the
     unwrapped list.
+  - **Toggle while upscaling:** switching DLSS back on (F9 or the overlay) below native rebuilds the DLSS feature,
+    so the engine scales down again instead of staying on the game's TAA.
