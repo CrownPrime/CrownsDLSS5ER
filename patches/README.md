@@ -28,7 +28,7 @@ msbuild OptiScaler.sln /t:OptiScaler /p:Configuration=Release /p:Platform=x64
 That needs Visual Studio 2022 with the C++ tools (toolset v143).
 
 The same change is committed, ready to clone and build, on the public fork:
-**[CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass @ `crownsdlss5er`](https://github.com/CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass/tree/crownsdlss5er)** (commit `d12b49c5`).
+**[CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass @ `crownsdlss5er`](https://github.com/CrownPrime/OptiScaler-DLSSNR-PreSR-Multipass/tree/crownsdlss5er)** (commit `435917e4`).
 
 ## EldenRingDLSS (MIT): `EldenRingDLSS-0.1.0-crownsdlss5er.patch`
 
