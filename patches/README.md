@@ -42,3 +42,5 @@ The same change is committed, ready to clone and build, on the public fork:
     unwrapped list.
   - **Toggle while upscaling:** switching DLSS back on (F9 or the overlay) below native rebuilds the DLSS feature,
     so the engine scales down again instead of staying on the game's TAA.
+  - **Loading screens and cutscenes while upscaling:** when the engine has gone back to full size, the add-on
+    rebuilds the DLSS feature itself (at most every 300 frames), so DLSS resumes without pressing F9.

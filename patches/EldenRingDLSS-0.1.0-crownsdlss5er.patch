@@ -1,6 +1,6 @@
 diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
 --- a/src/addon.cpp	2026-11-01 16:18:29.503561100 +0530
-+++ b/src/addon.cpp	2026-11-01 16:19:06.764680700 +0530
++++ b/src/addon.cpp	2026-11-02 09:42:55.414572300 +0530
 @@ -186,6 +186,10 @@
  fs::path g_ini_path;
  
@@ -86,7 +86,16 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
  void RetireOutput() {
    if (g_output != 0) g_retired.push_back({g_output, g_frame.load()});
    g_output = {0};
-@@ -1452,6 +1516,7 @@
+@@ -951,6 +1015,8 @@
+ // pixels, the width to 8 under a condition (0x141A54AA0; with ray tracing on, 58% gave 2224 wide, not 2228). An
+ // estimate: the feature is recreated only when the real size differs by more than kRenderSizeSlack.
+ constexpr uint32_t kRenderSizeSlack = 16;
++// Frames between feature rebuilds when the engine has gone back to full size while upscaling (about 5 s at 60 fps).
++constexpr uint64_t kRescaleRetryFrames = 300;
+ uint32_t EngineRenderSize(uint32_t size, float scale) {
+   return std::min(size, 4 * static_cast<uint32_t>(std::floor(size * scale / 4.0f + 0.5f)));
+ }
+@@ -1452,6 +1518,7 @@
    if (g_config.render_scale < 1.0f && g_upscale_at_composite)
      return PassThroughTaa(cmd_list, data, color, target, motion, scene, width, height, in_width, in_height);
    auto* const native = reinterpret_cast<ID3D12GraphicsCommandList*>(cmd_list->get_native());
@@ -94,7 +103,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
    if (!EnsureOutput(dev, width, height, td.texture.format)) return false;
    const bool game_exposure = g_config.game_exposure && EnsureExposure(dev);
    // The render size the feature is for: the engine's, once it renders at the scale, else the one it will use.
-@@ -1473,8 +1538,10 @@
+@@ -1473,8 +1540,10 @@
      return false;
    }
    if (!g_dlss.has_feature()) {
@@ -106,7 +115,28 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
                        want_rr ? g_rr_preset.load() : g_config.preset, true, !game_exposure, want_rr);
      RestoreState(cmd_list, data);
      if (!created) {
-@@ -1539,7 +1606,7 @@
+@@ -1490,7 +1559,19 @@
+     return false;  // DLSS takes over from the next frame
+   }
+   // E.g. the frame after the feature was created, before the engine follows the render scale.
+-  if (!g_dlss.accepts(in_width, in_height)) return false;
++  if (!g_dlss.accepts(in_width, in_height)) {
++    // The engine is back at full size while DLSS upscales: frames without an upscale (loading screens after fast
++    // travel or death, cutscenes) let the render scale lapse, and it is only set again shortly after a feature is
++    // created. Rebuild it, at most every kRescaleRetryFrames in case the engine keeps full size for a while.
++    const uint64_t frame = g_frame.load();
++    if (g_config.render_scale < 1.0f && !g_render_scale_missing && frame > g_last_upscale.load() + 4 &&
++        frame > g_feature_created.load() + kRescaleRetryFrames) {
++      g_recreate = true;
++      Log(reshade::log::level::info, "The engine went back to full size (loading screen or cutscene); recreating "
++                                     "the DLSS feature to upscale again.");
++    }
++    return false;
++  }
+   if (game_exposure) UploadExposure(cmd_list, scene.exposure);
+   const bool masked = g_config.vegetation_mask > 0.0f &&
+                       BuildMask(cmd_list, BoundResource(cmd_list, shader_stage::pixel, 5) /* g_StencilTex */, width,
+@@ -1539,7 +1620,7 @@
    in.mv_scale_y = mv_scale;
    in.reset = g_reset.exchange(false);
    in.frame_time_ms = g_frame_time_ms.load();
@@ -115,7 +145,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
    if (masked) cmd_list->barrier(g_mask, resource_usage::shader_resource, resource_usage::unordered_access);
    RestoreState(cmd_list, data);
    if (!ok) {
-@@ -1602,6 +1669,7 @@
+@@ -1602,6 +1683,7 @@
    const uint32_t width = sd.texture.width, height = sd.texture.height;
    if (width != g_render_width.load() || height != g_render_height.load()) return;
    auto* const native = reinterpret_cast<ID3D12GraphicsCommandList*>(cmd_list->get_native());
@@ -123,7 +153,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
    if (!EnsureOutput(dev, width, height, sd.texture.format)) return;
    if (g_dlss.has_feature() && (g_dlss.feature_width() != width || g_dlss.feature_height() != height ||
                                 g_dlss.feature_scale() != g_config.render_scale || g_dlss.feature_hdr())) {
-@@ -1609,8 +1677,10 @@
+@@ -1609,8 +1691,10 @@
      return;
    }
    if (!g_dlss.has_feature()) {
@@ -135,7 +165,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
                        in.width < width ? in.width : EngineRenderSize(width, g_config.render_scale),
                        in.height < height ? in.height : EngineRenderSize(height, g_config.render_scale),
                        g_config.render_scale, g_config.preset, false, false);
-@@ -1642,7 +1712,7 @@
+@@ -1642,7 +1726,7 @@
    dl.mv_scale_y = in.mv_scale;
    dl.reset = in.reset;
    dl.frame_time_ms = g_frame_time_ms.load();
@@ -144,7 +174,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
    RestoreState(cmd_list, data);
    if (!ok) {
      if (++g_failures == 1) Log(reshade::log::level::error, g_dlss.status());
-@@ -1766,21 +1836,30 @@
+@@ -1766,21 +1850,30 @@
  
  // --- Events ------------------------------------------------------------------------------------------------
  
@@ -179,7 +209,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
    std::lock_guard lock(g_dlss_mutex);
    RetireOutput();
    for (const Retired& r : g_retired) dev->destroy_resource(r.res);
-@@ -1816,6 +1895,21 @@
+@@ -1816,6 +1909,21 @@
    g_device = nullptr;
  }
  
@@ -201,7 +231,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
  // Material textures use anisotropic or wrapping samplers with a mip chain; post-processing, UI and shadow
  // lookups use clamped or comparison samplers, which keep the game's bias.
  bool OnCreateSampler(device*, sampler_desc& desc) {
-@@ -3802,9 +3896,7 @@
+@@ -3802,9 +3910,7 @@
    last = now;
  
    if (KeyPressed(g_config.toggle_key)) {
@@ -212,7 +242,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
      Log(reshade::log::level::info, g_config.enabled ? "DLSS on." : "DLSS off (game TAA).");
    }
  
-@@ -4299,11 +4391,7 @@
+@@ -4299,11 +4405,7 @@
  
  void OnOverlay(effect_runtime*) {
    bool enabled = g_config.enabled;
@@ -227,7 +257,7 @@ diff -ruN --strip-trailing-cr a/src/addon.cpp b/src/addon.cpp
    static const char* kPresetNames[] = {"Default (K)", "J", "K", "L", "M"};
 diff -ruN --strip-trailing-cr a/src/dlss.hpp b/src/dlss.hpp
 --- a/src/dlss.hpp	2026-11-01 16:18:29.510078400 +0530
-+++ b/src/dlss.hpp	2026-11-01 16:19:06.770685700 +0530
++++ b/src/dlss.hpp	2026-11-02 09:42:55.425092200 +0530
 @@ -57,6 +57,7 @@
    bool Evaluate(ID3D12GraphicsCommandList* cmd, const DlssInputs& inputs);
  
